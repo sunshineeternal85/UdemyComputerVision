@@ -1,26 +1,36 @@
 # %%
-#mnist
+import importlib
+
 import logging, os
+import datetime
 from typing import List, Tuple, Dict
 
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split
-from torchvision import transforms
-import torch.optim as optim
 import torch.nn as nn
+import torch.optim as optim 
+
+from torch.utils.data import DataLoader, random_split
+
+from torchvision import transforms
 from torchvision.datasets import MNIST
+
 
 import numpy as np
 import matplotlib.pyplot as plt
+import  custom_model
+importlib.reload(custom_model)
+from custom_model import Net, train_model
+
+
+
 
 # %%
 
+# Setup logging configuration
 logging.basicConfig(
-    filename=os.path.join(os.path.dirname(__file__),'section_15.log'),
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s - %(message)s')
-
-
+    format='%(asctime)s - %(levelname)s:%(lineno)d - %(funcName)s - %(message)s'
+)
 
 def transformer():
     transform = transforms.Compose([
@@ -40,87 +50,6 @@ def image_show(image: np.ndarray, ax=None):
         plt.imshow(image, cmap='gray')
     else:
         ax.imshow(image, cmap='gray')
-
-
-class Net(nn.Module):
-    def __init__(self):
-        super(Net,self).__init__()
-        self.conv1 = nn.Conv2d(1,32,(3,3))
-        self.conv2 = nn.Conv2d(32,64,(3,3))
-        self.pool = nn.MaxPool2d(2,2)
-        self.fc1 = nn.Linear(64*12*12, 128)
-        self.fc2 = nn.Linear(128,10)
-
-    def forward(self,x):
-        x = torch.nn.functional.relu(self.conv1(x))
-        x = self.pool(x)
-        x = torch.nn.functional.relu(self.conv2(x))
-        x = self.fc1(x)
-        x = self.fc2(x)
-        logging.info(f'load the NN model')
-        return x
-
-def train_model(model, train_loader, validation_loader, optimizer, criterion, epochs: int = 10)-> Tuple(Dict,Dict):
-    result = {}
-    log ={}
-
-    for epoch in range(epochs):
-        history = {
-            'train_loss': [],
-            'train_accuracy': [],
-            'validation_loss': [],
-            'validation_accuracy': []
-        }
-
-        per_batch_metrics = {
-            'train_loss_batches': [],
-            'train_accuracy_batches': []
-        }
-
-        for train_b_i, (x_train,y_train) in enumerate(train_loader):
-            x_train = x_train.to(device)
-            y_train = y_train.to(device)
-            
-            model.train()
-            optimizer.zero_grad()
-
-            z = model(x_train)
-            loss = criterion(z,y_train)
-            loss.backward()
-            optimizer.step()
-            
-            _, yhat = torch.max(z.detach(),1)
-            correct_in_batch += (yhat==y_train).sum().item()
-            total_in_batch = len(y_train)
-            correct_train_samples += correct_in_batch
-            total_train_samples += total_in_batch
-            running_train_loss += loss.item() 
-
-            # Calculate and store per-batch metrics (if desired)
-            per_batch_acc = correct_in_batch / total_in_batch
-            per_batch_loss = loss.item() # Use .item() for scalar loss
-
-            current_epoch_batch_losses.append(per_batch_loss)
-            current_epoch_batch_accuracies.append(per_batch_acc)
-
-
-            logging.info(f'Epoch {epoch+1}/{epochs} - Batch {train_b_i+1}/{len(train_loader)} - '
-                            f'Train Loss: {per_batch_loss:.4f} - Train Acc: {per_batch_acc:.4f}')
-
-        
-
-
-
-
-
-
-
-
-
-
-
-    return result, log
-
 
 # %%
 
@@ -143,7 +72,7 @@ if __name__ == '__main__':
     os.makedirs(train_path, exist_ok=True)
     os.makedirs(test_path,exist_ok=True)
 
-    train_dataset = MNIST(root= train_path, train= True,download= True, transform=transformer())
+    train_dataset = MNIST(root= train_patsave_pathh, train= True,download= True, transform=transformer())
     test_dataset = MNIST(root= test_path, train= False,download= True, transform=transformer())
 
     total_no =  len(train_dataset) 
@@ -151,82 +80,85 @@ if __name__ == '__main__':
     validation_no =  total_no - train_no
     test_no = len(test_dataset)
 
-    N_B_TRAIN = 12
-    N_B_VAL = 12
+    N_B_TRAIN = 256
+    N_B_VAL = 128
     N_B_TEST = test_no    
 
     train_dataset , validation_dataset = random_split(train_dataset, [train_no, validation_no] )
 
 
     train_dataloader = DataLoader(train_dataset, batch_size= N_B_TRAIN, shuffle=True)
-    validation_dataloader = DataLoader(validation_dataset, batch_size=N_B_VAL, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=N_B_TEST, shuffle=True)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=N_B_VAL, shuffle=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=N_B_TEST, shuffle=False)
 
     logging.info(f'set up the data for train, validation and test')
     
+    dataiter = iter(train_dataloader)
+    images, labels = next(dataiter)
 
 
-    # %%
-    if True:
-        print(train_dataset.classes)
-        print(type(train_dataset))
+    print(images.shape)
+    print(labels.shape)
 
-        for i, data in enumerate(train_dataset):
-            if i <2:
-                label = train_dataset.classes[data[1]]
-                image_object = data[0][0]
-                image = image_object.numpy()
-                image_shape = f'image size : {image.shape}'
-                print(image_shape)
-                image_show(image)
-                
-            else:
-                break
+
+    model = Net().to(device)
+
+    optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum=0.9)
+    criterion = nn.CrossEntropyLoss()
+
+    history = {
+    'train_loss': [], 
+    'train_accuracy': [],
+    'validation_loss': [],
+    'validation_accuracy': []
+    }
     
-    # %%
+    per_batch_metrics = {
+        'train_loss': [],
+        'train_accuracy': []
+    }
+
+    history, per_batch_metrics = train_model(model=model,
+                                             train_loader=train_dataloader,
+                                             val_loader=validation_dataloader,
+                                             optimizer=optimizer,
+                                             criterion=criterion,
+                                             device=device,
+                                             epochs=3)
+
+# %%
     if True:
-        
-        fig, ax = plt.subplots(3,4)
-        ax_flat = ax.flatten()
+        current_epoch_train_loss = history['train_loss'][-1]
+        current_epoch_validation_loss = history['validation_loss'][-1]
+        current_epoch_train_accuracy = history['train_accuracy'][-1]
+        current_epoch_validation_accuracy = history['validation_accuracy'][-1]
+        epoch = history['epoch_no'][-1]
+    
+        timestamp =  datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d_%H-%M-%S')
+        data = 'mnist'
+        folder = 'mnist_model'
+        save_path = os.path.join(os.path.dirname(__file__), folder)
+        os.makedirs(save_path, exist_ok=True)
 
-        # Get first batch of images
-        for index, (images, labels) in enumerate(validation_dataloader):
-            if index <1:
-                for i in range(12):
-                    image = images[i][0].numpy()
+        # Create a meaningful filename
+        filename = f"model_{data}_checkpoint_epoch_{epoch:03d}_{timestamp}.pth"
+        # The :03d ensures epoch number is zero-padded, e.g., 010 instead of 10
 
-                    label = str(labels[i].numpy())
-                    image_show(image, ax_flat[i])
-                plt.show()
-
-                
-
-            else:
-                break
-
-    # %%
-    if True:
-        if torch.cuda.is_available():
-            device = torch.device('gpu')
-        else:
-            device = torch.device('cpu')
-
-        net = Net()
-        net.to(device)
-        print(net)
-        
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.SGD(net.parameters(), lf = 0.001, momentum=0.9)
-
-        import torch
-        print(torch.__version__)
-        print(torch.version.cuda)
-        print(torch.cuda.is_available())
-        
+        CHECKPOINT_PATH = os.path.join(save_path, filename)
 
 
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'train_loss': current_epoch_train_loss,      # <-- Add train loss
+            'validation_loss': current_epoch_validation_loss, # <-- Add validation loss
+            'train_accuracy': current_epoch_train_accuracy,   # <-- Add train accuracy
+            'validation_accuracy': current_epoch_validation_accuracy, # <-- Add validation accuracy
+            'save_timestamp': timestamp,
+        }, CHECKPOINT_PATH)
 
-
+        logging.info(f'Model saved to: {CHECKPOINT_PATH}')
 
 
 # %%
