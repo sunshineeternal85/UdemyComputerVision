@@ -189,6 +189,57 @@ def train_model(model: nn.Module,
     return history, per_batch_metrics
 
 
+def inference(model: nn.Module,
+              test_loader: DataLoader,
+              criterion: nn.Module, # Loss function, useful for calculating test loss
+              device : torch.device
+             ) -> Dict[str, Any]: # Return type changed to indicate Dict of string to Any
+    
+    # Initialize accumulators for metrics *before* the loop
+    correct_test_samples = 0
+    total_test_samples = 0
+    running_test_loss = 0.0
+
+    model.eval() # Set model to evaluation mode (disables dropout, batchnorm updates)
+    
+    with torch.no_grad(): # Disable gradient computation for efficiency
+        # Corrected: Loop through the provided 'test_loader' not 'data_loader'
+        for x_test, y_test in test_loader: 
+            x_test = x_test.to(device)
+            y_test = y_test.to(device)
+            
+            z_test = model(x_test) # Forward pass: get predictions (logits)
+            
+            # Calculate test loss for the current batch
+            test_loss_batch = criterion(z_test, y_test) 
+
+            # Calculate accuracy metrics for the current batch
+            _, y_pred = torch.max(z_test, 1) # Get predicted class labels
+            correct_in_test_batch = (y_pred == y_test).sum().item()
+            total_in_test_batch = len(y_test) # Number of samples in current batch
+
+            # Accumulate metrics across all batches
+            correct_test_samples += correct_in_test_batch
+            total_test_samples += total_in_test_batch
+            running_test_loss += test_loss_batch.item() # Add the scalar loss for the batch
+
+    # Calculate overall test metrics after processing all batches
+    # Check if total_test_samples is zero to prevent division by zero
+    overall_test_loss = running_test_loss / len(test_loader) if len(test_loader) > 0 else 0.0
+    overall_test_accuracy = correct_test_samples / total_test_samples if total_test_samples > 0 else 0.0
+    
+    # Store results in a dictionary
+    test_result = {
+        'test_loss': overall_test_loss,
+        'test_accuracy': overall_test_accuracy,
+        'correct_predictions': correct_test_samples, # Optionally include raw counts
+        'total_samples': total_test_samples # Optionally include raw counts
+    }
+            
+    return test_result     
+
+
+
 
 if __name__ == "__main__":
 
