@@ -193,7 +193,7 @@ def inference(model: nn.Module,
               test_loader: DataLoader,
               criterion: nn.Module, # Loss function, useful for calculating test loss
               device : torch.device
-             ) -> Dict[str, Any]: # Return type changed to indicate Dict of string to Any
+             ) -> Dict[str, str]: # Return type changed to indicate Dict of string to Any
     
     # Initialize accumulators for metrics *before* the loop
     correct_test_samples = 0
