@@ -19,7 +19,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import  custom_model
 importlib.reload(custom_model)
-from custom_model import Net, train_model
+from custom_model import Net, train_model, NetAvg
 
 
 
@@ -72,7 +72,7 @@ if __name__ == '__main__':
     os.makedirs(train_path, exist_ok=True)
     os.makedirs(test_path,exist_ok=True)
 
-    train_dataset = MNIST(root= train_patsave_pathh, train= True,download= True, transform=transformer())
+    train_dataset = MNIST(root= train_path, train= True,download= True, transform=transformer())
     test_dataset = MNIST(root= test_path, train= False,download= True, transform=transformer())
 
     total_no =  len(train_dataset) 
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     print(labels.shape)
 
 
-    model = Net().to(device)
+    model = NetAvg().to(device)
 
     optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum=0.9)
     criterion = nn.CrossEntropyLoss()
@@ -124,9 +124,8 @@ if __name__ == '__main__':
                                              optimizer=optimizer,
                                              criterion=criterion,
                                              device=device,
-                                             epochs=3)
+                                             epochs=5)
 
-# %%
     if True:
         current_epoch_train_loss = history['train_loss'][-1]
         current_epoch_validation_loss = history['validation_loss'][-1]
@@ -141,7 +140,7 @@ if __name__ == '__main__':
         os.makedirs(save_path, exist_ok=True)
 
         # Create a meaningful filename
-        filename = f"model_{data}_checkpoint_epoch_{epoch:03d}_{timestamp}.pth"
+        filename = f"model_Avg_{data}_checkpoint_epoch_{epoch:03d}_{timestamp}.pth"
         # The :03d ensures epoch number is zero-padded, e.g., 010 instead of 10
 
         CHECKPOINT_PATH = os.path.join(save_path, filename)

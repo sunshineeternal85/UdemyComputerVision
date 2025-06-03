@@ -2,7 +2,6 @@
 import importlib
 
 import logging, os
-import datetime
 from typing import List, Tuple, Dict
 
 import torch
@@ -19,7 +18,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import  custom_model
 importlib.reload(custom_model)
-from custom_model import Net, train_model
+from custom_model import Net, train_model, NetAvg
 
 
 
@@ -91,9 +90,10 @@ if __name__ == '__main__':
 
 #%%
     PATH_TO_MODEL = './mnist_model/model_mnist_checkpoint_epoch_004_2025-06-02_17-33-14.pth'
+    PATH_TO_MODEL_AVG = './mnist_model/model_Avg_mnist_checkpoint_epoch_004_2025-06-03_16-17-39.pth'
 
-    model = Net().to(device)
-    model_save = torch.load(PATH_TO_MODEL)
+    model = NetAvg().to(device)
+    model_save = torch.load(PATH_TO_MODEL_AVG)
     train_accuracy = model_save['train_accuracy']
 
     model_param = model_save['model_state_dict']
@@ -115,10 +115,19 @@ if __name__ == '__main__':
             accuracy = total_correct / total
 
 
-            index_bool = (y_pred != y_test).tolist()
+            index_bool = (y_pred == y_test).tolist()
             for index, bool in enumerate(index_bool):
-                if bool:
-                    print(index, bool)
+                position = batch_i * len(y_test) + index
+                if not(bool):
+                    wrong_prediction.append(
+                        (position, 
+                        y_pred[index].item(),
+                        y_test[index].item(),
+                        x_test[index].numpy())
+                                            )
+                    #print(wrong_prediction[-1][0:-1])
+                    #image_show(x_test[index].numpy()[0])
+
 
 
             logging.debug(f'prediction accuracy {accuracy:.4f} for {total_correct} correct and {total_incorrect} wrong, out of  {total} tests')
@@ -126,11 +135,30 @@ if __name__ == '__main__':
 
             #logging.info(f'batch no {batch_i} | \n output : {y_pred}')
 
-            if batch_i == 0:
+            if batch_i == 20000:
                 break
         logging.info(f'prediction accuracy {accuracy:.4f} for {total_correct} correct and {total_incorrect} wrong, out of  {total} tests')
         logging.info(f'training accuracy : {train_accuracy:.4f}')
     
+
+        fig, ax = plt.subplots(3,4)
+        ax_flatten = ax.flatten()
+        fig.suptitle('Examples of Incorrect Predictions', fontsize=16, weight='bold')
+
+        index_sample = np.random.randint(0, len(wrong_prediction), len(ax_flatten))
+        for i in range(len(ax_flatten)):
+            y_position = wrong_prediction[index_sample[i]][0]
+            y_pred = wrong_prediction[index_sample[i]][1]
+            y_true = wrong_prediction[index_sample[i]][2]
+            image = wrong_prediction[index_sample[i]][3][0]
+            logging.debug(f'{y_position}-{y_pred}-{y_true}')
+            image_show(image, ax=ax_flatten[i])
+            ax_flatten[i].set_title(f'True: {y_true}\nPred: {y_pred}', fontsize=10)
+        ('Sample of wrong prediction')
+        plt.tight_layout()
+        plt.show()
+
+
 
 
 # %%

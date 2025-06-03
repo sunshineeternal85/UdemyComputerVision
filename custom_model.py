@@ -51,6 +51,47 @@ class Net(nn.Module):
         logging.debug(f'After fc2: {x.shape}') # 10
 
         return x
+    
+
+class NetAvg(nn.Module):
+    def __init__(self):
+        super(NetAvg,self).__init__()
+        self.conv1 = nn.Conv2d(1,32,(3,3))
+        self.conv2 = nn.Conv2d(32,64,(3,3))
+        self.max_pool = nn.MaxPool2d(2,2)
+        self.avg_pool = nn.AdaptiveAvgPool2d((10,10))
+        self.fc1 = nn.Linear(64*10*10, 128)
+        self.fc2 = nn.Linear(128,10)
+
+    def forward(self,x):
+        logging.debug(f'Input shape: {x.shape}') # 28*28
+
+        x = F.relu(self.conv1(x))
+        logging.debug(f'after conv1 shape: {x.shape}') # 28-3+1 , 26*26
+        
+        x = F.relu(self.conv2(x))
+        logging.debug(f'after conv2 shape: {x.shape}') # 26-3+1 , 24*24        
+        
+        x = self.max_pool(x)
+        logging.debug(f'after maxpool shape: {x.shape}') # 24/2 , 12*12
+
+        x = self.avg_pool(x)
+        logging.debug(f'after avgpool shape: {x.shape}') # 24/2 , 10*10
+
+        
+        x = x.view(-1, 64*10*10) 
+        logging.debug(f'After flatten: {x.shape}') # 9212
+
+        x = F.relu(self.fc1(x))
+        logging.debug(f'After fc1: {x.shape}') # 128
+        
+        x = self.fc2(x)
+        logging.debug(f'After fc2: {x.shape}') # 10
+
+        return x
+
+
+
 
 
 def train_model(model: nn.Module,
@@ -120,7 +161,7 @@ def train_model(model: nn.Module,
 
                 logging.debug(f'e: {epoch} |'
                              f'b: {train_b_i} |'
-                             f'loss {running_train_loss_epoch} |'
+                             f'loss {running_train_loss_epoch/(train_b_i+1)} |'
                              f'acc:{per_batch_acc_current_batch}')
 
 
@@ -189,60 +230,15 @@ def train_model(model: nn.Module,
     return history, per_batch_metrics
 
 
-def inference(model: nn.Module,
-              test_loader: DataLoader,
-              criterion: nn.Module, # Loss function, useful for calculating test loss
-              device : torch.device
-             ) -> Dict[str, str]: # Return type changed to indicate Dict of string to Any
-    
-    # Initialize accumulators for metrics *before* the loop
-    correct_test_samples = 0
-    total_test_samples = 0
-    running_test_loss = 0.0
-
-    model.eval() # Set model to evaluation mode (disables dropout, batchnorm updates)
-    
-    with torch.no_grad(): # Disable gradient computation for efficiency
-        # Corrected: Loop through the provided 'test_loader' not 'data_loader'
-        for x_test, y_test in test_loader: 
-            x_test = x_test.to(device)
-            y_test = y_test.to(device)
-            
-            z_test = model(x_test) # Forward pass: get predictions (logits)
-            
-            # Calculate test loss for the current batch
-            test_loss_batch = criterion(z_test, y_test) 
-
-            # Calculate accuracy metrics for the current batch
-            _, y_pred = torch.max(z_test, 1) # Get predicted class labels
-            correct_in_test_batch = (y_pred == y_test).sum().item()
-            total_in_test_batch = len(y_test) # Number of samples in current batch
-
-            # Accumulate metrics across all batches
-            correct_test_samples += correct_in_test_batch
-            total_test_samples += total_in_test_batch
-            running_test_loss += test_loss_batch.item() # Add the scalar loss for the batch
-
-    # Calculate overall test metrics after processing all batches
-    # Check if total_test_samples is zero to prevent division by zero
-    overall_test_loss = running_test_loss / len(test_loader) if len(test_loader) > 0 else 0.0
-    overall_test_accuracy = correct_test_samples / total_test_samples if total_test_samples > 0 else 0.0
-    
-    # Store results in a dictionary
-    test_result = {
-        'test_loss': overall_test_loss,
-        'test_accuracy': overall_test_accuracy,
-        'correct_predictions': correct_test_samples, # Optionally include raw counts
-        'total_samples': total_test_samples # Optionally include raw counts
-    }
-            
-    return test_result     
 
 
 
+#%%
 
 if __name__ == "__main__":
 
+    import torch
+    import torch.nn as nn
     logging.debug('Test message4')
 
     if torch.cuda.is_available():
@@ -251,7 +247,27 @@ if __name__ == "__main__":
     else:
         device = torch.device('cpu')
         logging.info('cuda not available')
+
+    x = torch.tensor(torch.randint(1,10,(1,1,4,4)),dtype=float)
+    x_samp = x[0,0,:2,0:2]
+    print(x) 
+    print('\n')
+    print( x_samp)
+    print(x_samp.mean().item())
+    if False:
+        pool = nn.MaxPool2d(kernel_size=(3,3), stride=3)
+        x = pool(x)
+        print(x)
+    if True:
+        pool = nn.AdaptiveAvgPool2d(output_size=(6,6))
+        x = pool(x)
+        print(x)        
+
+
+
                  
 
 
 
+
+# %%
