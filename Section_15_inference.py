@@ -13,9 +13,11 @@ from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
 from torchvision.datasets import MNIST
 
+from sklearn.metrics import confusion_matrix, classification_report
 
 import numpy as np
 import matplotlib.pyplot as plt
+
 import  custom_model
 importlib.reload(custom_model)
 from custom_model import Net, train_model, NetAvg
@@ -105,6 +107,7 @@ if __name__ == '__main__':
         total = 0
         total_incorrect = 0
         wrong_prediction =[]
+        result = []
         for batch_i , (x_test, y_test) in enumerate(test_dataloader):
             output = model(x_test)
             y_pred = torch.max(output,1)[1]
@@ -114,10 +117,12 @@ if __name__ == '__main__':
             total_incorrect += (y_pred != y_test).sum().item()
             accuracy = total_correct / total
 
+            result.append([batch_i, y_test, y_pred])
 
             index_bool = (y_pred == y_test).tolist()
             for index, bool in enumerate(index_bool):
                 position = batch_i * len(y_test) + index
+                
                 if not(bool):
                     wrong_prediction.append(
                         (position, 
@@ -159,6 +164,18 @@ if __name__ == '__main__':
         plt.show()
 
 
+        y_pred_vals = []
+        y_true_vals = []
+        for index, i in enumerate(result):
+            y_pred_i = i[2].cpu().numpy()  # i[2] contains the predictions
+            y_true_i = i[1].cpu().numpy()  # i[1] contains the true labels
+            y_pred_vals.extend(y_pred_i)   # use extend instead of append
+            y_true_vals.extend(y_true_i)   # use extend instead of append
 
+        y_pred = np.array(y_pred_vals)
+        y_true = np.array(y_true_vals)
+        print(confusion_matrix(y_true=y_true, y_pred=y_pred))
+
+        print(classification_report(y_true=y_true, y_pred=y_pred))
 
 # %%
