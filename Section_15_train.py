@@ -17,9 +17,9 @@ from torchvision.datasets import MNIST
 
 import numpy as np
 import matplotlib.pyplot as plt
-import  custom_model
+import  model.custom_model as custom_model
 importlib.reload(custom_model)
-from custom_model import Net, train_model, NetAvg
+from model.custom_model import Net, train_model, NetAvg
 
 
 
@@ -72,8 +72,11 @@ if __name__ == '__main__':
     os.makedirs(train_path, exist_ok=True)
     os.makedirs(test_path,exist_ok=True)
 
+
     train_dataset = MNIST(root= train_path, train= True,download= True, transform=transformer())
     test_dataset = MNIST(root= test_path, train= False,download= True, transform=transformer())
+
+
 
     total_no =  len(train_dataset) 
     train_no = int(round(len(train_dataset) * 0.90,0))

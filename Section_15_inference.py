@@ -18,9 +18,10 @@ from sklearn.metrics import confusion_matrix, classification_report
 import numpy as np
 import matplotlib.pyplot as plt
 
-import  custom_model
+import model.custom_model as custom_model
+
 importlib.reload(custom_model)
-from custom_model import Net, train_model, NetAvg
+from model.custom_model import Net, train_model, NetAvg
 
 
 
