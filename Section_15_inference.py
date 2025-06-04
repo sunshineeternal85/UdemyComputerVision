@@ -25,7 +25,6 @@ from custom_model import Net, train_model, NetAvg
 
 
 
-# %%
 
 # Setup logging configuration
 logging.basicConfig(
@@ -90,7 +89,6 @@ if __name__ == '__main__':
     logging.info(f'classes: {CLASSES}')
 
 
-#%%
     PATH_TO_MODEL = './mnist_model/model_mnist_checkpoint_epoch_004_2025-06-02_17-33-14.pth'
     PATH_TO_MODEL_AVG = './mnist_model/model_Avg_mnist_checkpoint_epoch_004_2025-06-03_16-17-39.pth'
 
@@ -161,7 +159,7 @@ if __name__ == '__main__':
             ax_flatten[i].set_title(f'True: {y_true}\nPred: {y_pred}', fontsize=10)
         ('Sample of wrong prediction')
         plt.tight_layout()
-        plt.show()
+        plt.show() 
 
 
         y_pred_vals = []
