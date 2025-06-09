@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim 
 
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, Subset
 
 from torchvision import transforms
 from torchvision.datasets import MNIST
@@ -21,7 +21,7 @@ import  model.custom_model as custom_model
 importlib.reload(custom_model)
 from model.custom_model import Net, train_model, NetAvg,Net_bn, NetAvg_Bn
 
-
+# model used in section 15 onward for mnist
 
 # %%
 
@@ -100,11 +100,17 @@ if __name__ == '__main__':
 
 
     train_dataset_1 = MNIST(root= train_path, train= True,download= True, transform=transformer())
+
     train_dataset_2 = MNIST(root= train_path, train= True,download= True, transform=transformer_add())
+    train_dataset_2 = Subset(train_dataset_2, indices= np.random.choice(range(0,60000), size=10000, replace=False))
+    
     train_dataset_3 = MNIST(root= train_path, train= True,download= True, transform=transformer_color())
+    train_dataset_3 = Subset(train_dataset_3, indices= np.random.choice(range(0,60000), size=10000, replace=False))
+
     train_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2, train_dataset_3])
     test_dataset = MNIST(root= test_path, train= False,download= True, transform=transformer())
 
+# %%
 
 
     total_no =  len(train_dataset) 
@@ -112,7 +118,7 @@ if __name__ == '__main__':
     validation_no =  total_no - train_no
     test_no = len(test_dataset)
 
-    N_B_TRAIN = 128
+    N_B_TRAIN = 512
     N_B_VAL = 128
     N_B_TEST = test_no    
 
@@ -167,12 +173,12 @@ if __name__ == '__main__':
     
         timestamp =  datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d_%H-%M-%S')
         data = 'mnist'
-        folder = 'mnist_model_transformers'
+        folder = 'mnist_model_transformers_reduced'
         save_path = os.path.join(os.path.dirname(__file__), folder)
         os.makedirs(save_path, exist_ok=True)
 
         # Create a meaningful filename
-        filename = f"model_StdBN_{data}_checkpoint_epoch_{epoch:03d}_{timestamp}.pth"
+        filename = f"model_StdBn_{data}_checkpoint_epoch_{epoch:03d}_{timestamp}.pth"
         # The :03d ensures epoch number is zero-padded, e.g., 010 instead of 10
 
         CHECKPOINT_PATH = os.path.join(save_path, filename)
@@ -193,6 +199,6 @@ if __name__ == '__main__':
 
 
 # %%
-
     if True:
-        transforms.RandomRotation((-15,15))
+        print(len(range(20000,40000)))
+# %%
