@@ -19,8 +19,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import  model.custom_model as custom_model
 importlib.reload(custom_model)
-from model.custom_model import Net, train_model, NetAvg
-
+from model.custom_model import Net, train_model, NetAvg,Net_bn, NetAvg_Bn
 
 
 
@@ -42,6 +41,33 @@ def transformer():
     ])
     logging.info(f'normalise the tensor image')
     return transform
+
+
+def transformer_add():
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(
+            (0.5,),
+            (0.5,)
+        ),
+        transforms.RandomRotation(degrees=(-15,15))
+    ])
+    logging.info(f'normalise, rotate the tensor image')
+    return transform
+
+
+def transformer_color():
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(
+            (0.5,),
+            (0.5,)
+        ),
+        transforms.ColorJitter((1.2,1.2))
+    ])
+    logging.info(f'normalise, lighter gray to the tensor image')
+    return transform
+
 
 
 def image_show(image: np.ndarray, ax=None):
@@ -73,7 +99,10 @@ if __name__ == '__main__':
     os.makedirs(test_path,exist_ok=True)
 
 
-    train_dataset = MNIST(root= train_path, train= True,download= True, transform=transformer())
+    train_dataset_1 = MNIST(root= train_path, train= True,download= True, transform=transformer())
+    train_dataset_2 = MNIST(root= train_path, train= True,download= True, transform=transformer_add())
+    train_dataset_3 = MNIST(root= train_path, train= True,download= True, transform=transformer_color())
+    train_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2, train_dataset_3])
     test_dataset = MNIST(root= test_path, train= False,download= True, transform=transformer())
 
 
@@ -83,7 +112,7 @@ if __name__ == '__main__':
     validation_no =  total_no - train_no
     test_no = len(test_dataset)
 
-    N_B_TRAIN = 256
+    N_B_TRAIN = 128
     N_B_VAL = 128
     N_B_TEST = test_no    
 
@@ -104,7 +133,7 @@ if __name__ == '__main__':
     print(labels.shape)
 
 
-    model = NetAvg().to(device)
+    model = Net_bn().to(device)
 
     optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum=0.9)
     criterion = nn.CrossEntropyLoss()
@@ -127,7 +156,7 @@ if __name__ == '__main__':
                                              optimizer=optimizer,
                                              criterion=criterion,
                                              device=device,
-                                             epochs=5)
+                                             epochs=20)
 
     if True:
         current_epoch_train_loss = history['train_loss'][-1]
@@ -138,12 +167,12 @@ if __name__ == '__main__':
     
         timestamp =  datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d_%H-%M-%S')
         data = 'mnist'
-        folder = 'mnist_model'
+        folder = 'mnist_model_transformers'
         save_path = os.path.join(os.path.dirname(__file__), folder)
         os.makedirs(save_path, exist_ok=True)
 
         # Create a meaningful filename
-        filename = f"model_Avg_{data}_checkpoint_epoch_{epoch:03d}_{timestamp}.pth"
+        filename = f"model_StdBN_{data}_checkpoint_epoch_{epoch:03d}_{timestamp}.pth"
         # The :03d ensures epoch number is zero-padded, e.g., 010 instead of 10
 
         CHECKPOINT_PATH = os.path.join(save_path, filename)
@@ -164,3 +193,6 @@ if __name__ == '__main__':
 
 
 # %%
+
+    if True:
+        transforms.RandomRotation((-15,15))

@@ -51,7 +51,43 @@ class Net(nn.Module):
         logging.debug(f'After fc2: {x.shape}') # 10
 
         return x
-    
+
+class Net_bn(nn.Module):
+    def __init__(self):
+        super(Net_bn,self).__init__()
+        self.conv1 = nn.Conv2d(1,32,(3,3))
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32,64,(3,3))
+        self.bn2 = nn.BatchNorm2d(64)
+        self.pool = nn.MaxPool2d(2,2)
+        self.fc1 = nn.Linear(64*12*12, 128)
+        self.fc2 = nn.Linear(128,10)
+
+    def forward(self,x):
+        logging.debug(f'Input shape: {x.shape}') # 28*28
+
+        x = F.relu(self.conv1(x))
+        x = self.bn1(x) 
+        logging.debug(f'after conv1 shape: {x.shape}') # 28-3+1 , 26*26
+        
+        x = F.relu(self.conv2(x))
+        x = self.bn2(x)
+        logging.debug(f'after conv2 shape: {x.shape}') # 26-3+1 , 24*24
+
+        x = self.pool(x)
+        logging.debug(f'after maxpool shape: {x.shape}') # 24/2 , 12*12
+        
+        x = x.view(-1, 64*12*12) 
+        logging.debug(f'After flatten: {x.shape}') # 9212
+
+        x = F.relu(self.fc1(x))
+        logging.debug(f'After fc1: {x.shape}') # 128
+        
+        x = self.fc2(x)
+        logging.debug(f'After fc2: {x.shape}') # 10
+
+        return x
+
 
 class NetAvg(nn.Module):
     def __init__(self):
@@ -90,6 +126,45 @@ class NetAvg(nn.Module):
 
         return x
 
+
+class NetAvg_Bn(nn.Module):
+    def __init__(self):
+        super(NetAvg_Bn,self).__init__()
+        self.conv1 = nn.Conv2d(1,32,(3,3))
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32,64,(3,3))
+        self.max_pool = nn.MaxPool2d(2,2)
+        self.avg_pool = nn.AdaptiveAvgPool2d((10,10))
+        self.fc1 = nn.Linear(64*10*10, 128)
+        self.fc2 = nn.Linear(128,10)
+
+    def forward(self,x):
+        logging.debug(f'Input shape: {x.shape}') # 28*28
+
+        x = F.relu(self.conv1(x))
+        x = self.bn1(x)
+        logging.debug(f'after conv1 shape: {x.shape}') # 28-3+1 , 26*26
+        
+        x = F.relu(self.conv2(x))
+        logging.debug(f'after conv2 shape: {x.shape}') # 26-3+1 , 24*24
+
+        x = self.max_pool(x)
+        logging.debug(f'after maxpool shape: {x.shape}') # 24/2 , 12*12
+
+        x = self.avg_pool(x)
+        logging.debug(f'after avgpool shape: {x.shape}') # 24/2 , 10*10
+
+        
+        x = x.view(-1, 64*10*10) 
+        logging.debug(f'After flatten: {x.shape}') # 9212
+
+        x = F.relu(self.fc1(x))
+        logging.debug(f'After fc1: {x.shape}') # 128
+        
+        x = self.fc2(x)
+        logging.debug(f'After fc2: {x.shape}') # 10
+
+        return x
 
 
 

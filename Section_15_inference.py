@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import model.custom_model as custom_model
 
 importlib.reload(custom_model)
-from model.custom_model import Net, train_model, NetAvg
+from model.custom_model import Net, train_model, NetAvg, NetAvg_Bn, Net_bn
 
 
 
@@ -90,11 +90,10 @@ if __name__ == '__main__':
     logging.info(f'classes: {CLASSES}')
 
 
-    PATH_TO_MODEL = './mnist_model/model_mnist_checkpoint_epoch_004_2025-06-02_17-33-14.pth'
-    PATH_TO_MODEL_AVG = './mnist_model/model_Avg_mnist_checkpoint_epoch_004_2025-06-03_16-17-39.pth'
-
-    model = NetAvg().to(device)
-    model_save = torch.load(PATH_TO_MODEL_AVG)
+    PATH_TO_MODEL = './mnist_model_transformers/model_Std_mnist_checkpoint_epoch_016_2025-06-09_18-44-04.pth'
+   
+    model = Net().to(device)
+    model_save = torch.load(PATH_TO_MODEL)
     train_accuracy = model_save['train_accuracy']
 
     model_param = model_save['model_state_dict']
@@ -108,6 +107,8 @@ if __name__ == '__main__':
         wrong_prediction =[]
         result = []
         for batch_i , (x_test, y_test) in enumerate(test_dataloader):
+            x_test = x_test.to(device)
+            y_test = y_test.to(device)
             output = model(x_test)
             y_pred = torch.max(output,1)[1]
 
@@ -127,22 +128,22 @@ if __name__ == '__main__':
                         (position, 
                         y_pred[index].item(),
                         y_test[index].item(),
-                        x_test[index].numpy())
+                        x_test[index].cpu().numpy())
                                             )
                     #print(wrong_prediction[-1][0:-1])
                     #image_show(x_test[index].numpy()[0])
 
 
 
-            logging.debug(f'prediction accuracy {accuracy:.4f} for {total_correct} correct and {total_incorrect} wrong, out of  {total} tests')
-            logging.debug(f'training accuracy : {train_accuracy:.4f}')
+            logging.debug(f'prediction accuracy {accuracy:.6f} for {total_correct} correct and {total_incorrect} wrong, out of  {total} tests')
+            logging.debug(f'training accuracy : {train_accuracy:.6f}')
 
             #logging.info(f'batch no {batch_i} | \n output : {y_pred}')
 
             if batch_i == 20000:
                 break
-        logging.info(f'prediction accuracy {accuracy:.4f} for {total_correct} correct and {total_incorrect} wrong, out of  {total} tests')
-        logging.info(f'training accuracy : {train_accuracy:.4f}')
+        logging.info(f'prediction accuracy {accuracy:.6f} for {total_correct} correct and {total_incorrect} wrong, out of  {total} tests')
+        logging.info(f'training accuracy : {train_accuracy:.6f}')
     
 
         fig, ax = plt.subplots(3,4)
