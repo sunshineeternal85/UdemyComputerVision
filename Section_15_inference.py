@@ -93,11 +93,12 @@ if __name__ == '__main__':
     PATH_TO_MODEL = './mnist_model_transformers/model_Std_mnist_checkpoint_epoch_016_2025-06-09_18-44-04.pth'
    
     model = Net().to(device)
-    model_save = torch.load(PATH_TO_MODEL)
+    model_save = torch.load(PATH_TO_MODEL, map_location=torch.device('cpu'))
     train_accuracy = model_save['train_accuracy']
 
     model_param = model_save['model_state_dict']
     model.load_state_dict(model_param)
+    model.to(device)
     model.eval()
 
     with torch.no_grad():
