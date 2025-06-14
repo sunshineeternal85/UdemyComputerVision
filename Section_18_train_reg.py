@@ -148,21 +148,25 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(dataset=train_dataset, batch_size=32, shuffle=True)
     test_dataloader = DataLoader(dataset=test_dataset, batch_size=32, shuffle=False)
 
-    fig, ax = plt.subplots(3,3, figsize=(4,4))
- 
-    ax_flatten = ax.flatten()
+    if False:
+        fig, ax = plt.subplots(3,3, figsize=(4,4))
+    
+        ax_flatten = ax.flatten()
 
-    num_images_to_plot = min(len(train_dataset), len(ax_flatten))
+        num_images_to_plot = min(len(train_dataset), len(ax_flatten))
+
+    
+        for i in range(num_images_to_plot):
+            x, y = train_dataset[i]
+            imshow(x, ax_flatten[i])
+            ax_flatten[i].set_title(f'Label: {y}') # Add label as title
+            ax_flatten[i].axis('off') 
+        plt.tight_layout()
+        plt.show()
 
 
-    for i in range(num_images_to_plot):
-        x, y = train_dataset[i]
-        imshow(x, ax_flatten[i])
-        ax_flatten[i].set_title(f'Label: {y}') # Add label as title
-        ax_flatten[i].axis('off') 
-    plt.tight_layout()
-    plt.show()
 
-
-
+# %%
+    model = Net_bn().to(device)
+    print(model)
 # %%
