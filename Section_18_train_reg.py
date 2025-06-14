@@ -133,19 +133,21 @@ if __name__ == '__main__':
 
     train_dataset_trans2 = FashionMNIST(root=root,train=True, download=True,transform= transformer_grey())
     train_dataset_trans2 = Subset(train_dataset_trans2,index_sample)
-    
 
     train_dataset = ConcatDataset([train_dataset,
                                    train_dataset_trans1,
                                    train_dataset_trans2
                                    ])
+    
+    train_dataset, validation_dataset = random_split(train_dataset,lengths=[len(train_dataset)-4000,4000])
 
     logging.info(f'train_dataset has {len(train_dataset)} items')
+    logging.info(f'validation_dataset has {len(validation_dataset)} items')
     logging.info(f'test_dataset has {len(test_dataset)} items')
 
-    logging.info(f'x size: {train_dataset[0][0].size()}')
 
     train_dataloader = DataLoader(dataset=train_dataset, batch_size=32, shuffle=True)
+    validation_dataloader = DataLoader(dataset=validation_dataset, batch_size=32, shuffle=True)
     test_dataloader = DataLoader(dataset=test_dataset, batch_size=32, shuffle=False)
 
     if False:
@@ -168,5 +170,28 @@ if __name__ == '__main__':
 
 # %%
     model = Net_bn().to(device)
-    print(model)
+    logging.info(f'loading model : {model}')
+
+    optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum=0.9)
+    criterion = nn.CrossEntropyLoss()
+
+    history = {
+    'train_loss': [], 
+    'train_accuracy': [],
+    'validation_loss': [],
+    'validation_accuracy': []
+    }
+    
+    per_batch_metrics = {
+        'train_loss': [],
+        'train_accuracy': []
+    }
+
+    history, per_batch_metrics = train_model(model=model,
+                                             train_loader=train_dataloader,
+                                             val_loader=validation_dataloader,
+                                             optimizer=optimizer,
+                                             criterion=criterion,
+                                             device=device,
+                                             epochs=20)
 # %%
