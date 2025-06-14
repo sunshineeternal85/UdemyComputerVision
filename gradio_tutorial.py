@@ -2,7 +2,9 @@
 
 import gradio as gr
 import numpy as np
+import random
 from typing import List
+
 
 # %%
 
@@ -51,6 +53,9 @@ def sepia(input_image: np.array):
 
 
 
+def random_response(response, history):
+    return random.choice(['Yes','No'])
+
 
 
 # %%
@@ -89,7 +94,7 @@ if __name__ == '__main__':
             greet_btn.click(fn=greet3, inputs=[first_name, last_name], outputs=output)
         demo.launch()
 
-    if True:
+    if False:
         with gr.Blocks() as demo:
             with gr.Row():
                 with gr.Column():
@@ -115,6 +120,11 @@ if __name__ == '__main__':
                                             country], 
                                         outputs=output)
         demo.launch()
-
+    if True:
+        demo = gr.ChatInterface(
+            fn=random_response,
+            type='messages',
+            title='chatbot')
+        demo.launch()
 
 # %%

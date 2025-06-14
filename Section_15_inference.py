@@ -90,9 +90,9 @@ if __name__ == '__main__':
     logging.info(f'classes: {CLASSES}')
 
 
-    PATH_TO_MODEL = './mnist_model_transformers/model_Std_mnist_checkpoint_epoch_016_2025-06-09_18-44-04.pth'
+    PATH_TO_MODEL = './mnist_model_transformers/model_StdBN_mnist_checkpoint_epoch_019_2025-06-09_19-10-05.pth'
    
-    model = Net().to(device)
+    model = Net_bn()
     model_save = torch.load(PATH_TO_MODEL, map_location=torch.device('cpu'))
     train_accuracy = model_save['train_accuracy']
 
