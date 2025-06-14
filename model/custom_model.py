@@ -89,6 +89,73 @@ class Net_bn(nn.Module):
         return x
 
 
+
+class Net_bn_1(nn.Module):
+    def __init__(self):
+        super(Net_bn_1,self).__init__()
+        self.conv1 = nn.Conv2d(1,32,(3,3), padding=1)  # Padding added to keep dimensions
+        self.bn1 = nn.BatchNorm2d(32)
+        self.drop1 = nn.Dropout(0.25)  # Adding dropout layer
+
+        self.conv2 = nn.Conv2d(32,64,(3,3), padding=1)  # Padding added to keep dimensions
+        self.bn2 = nn.BatchNorm2d(64)
+        self.drop2 = nn.Dropout(0.25)  # Adding dropout layer
+        
+        self.conv3 = nn.Conv2d(64,128,(3,3), padding=1)  # Padding added to keep dimensions
+        self.bn3 = nn.BatchNorm2d(128)
+        self.drop3 = nn.Dropout(0.25)  # Adding dropout layer
+        
+        self.conv4 = nn.Conv2d(128,256,(3,3), padding=1)  # Padding added to keep dimensions
+        self.bn4 = nn.BatchNorm2d(256)
+        self.drop4 = nn.Dropout(0.25)  # Adding dropout layer
+        
+        self.pool = nn.MaxPool2d(2,2)
+        self.fc1 = nn.Linear(256*14*14, 128)
+        self.fc2 = nn.Linear(128,10)
+
+    def forward(self,x):
+        logging.debug(f'Input shape: {x.shape}') # 28*28
+        
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = F.relu(x)
+        x = self.drop1(x)  # Apply dropout after first conv layer 
+        logging.debug(f'after conv1 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
+        
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = F.relu(x)
+        x = self.drop2(x)  # Apply dropout after second conv layer
+        logging.debug(f'after conv2 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
+
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = F.relu(x)
+        x = self.drop3(x)
+        logging.debug(f'after conv3 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
+
+        x = self.conv4(x)
+        x = self.bn4(x)
+        x = F.relu(x)
+        x = self.drop4(x)
+        logging.debug(f'after conv4 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
+
+        x = self.pool(x)
+        logging.debug(f'after maxpool shape: {x.shape}') # 28/2 , 14*14
+
+        x = x.view(-1, 256*14*14)
+        logging.debug(f'After flatten: {x.shape}') #  50176
+
+        x = F.relu(self.fc1(x))
+        logging.debug(f'After fc1: {x.shape}') # 128
+        
+        x = self.fc2(x)
+        logging.debug(f'After fc2: {x.shape}') # 10
+
+        return x
+
+
+
 class NetAvg(nn.Module):
     def __init__(self):
         super(NetAvg,self).__init__()
