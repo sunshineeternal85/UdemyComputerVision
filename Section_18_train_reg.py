@@ -29,47 +29,30 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s:%(lin
 
 
 
-def transformer():
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(
-            (0.5,),
-            (0.5,)
+def transformer(is_train: bool = True):
+    if is_train:
+        transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(p=0.25),
+            transforms.RandomRotation(degrees=(-15,15), p=0.25),
+            transforms.RandomAdjustSharpness(p=0.25),
+            transforms.RandomGrayscale(p=0.25),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                (0.5,),
+                (0.5,)
+            ),
+            ]
         )
-        ]
-    )
-    logging.info(f'return data in tensor and normalised')
+        logging.info(f'return train data with data augmentation, then to tensor and normalised')
+    else:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(
+                (0.5,),
+                (0.5,))
+        ])
+        logging.info(f'return test or the validation data to tensor and normalised')
     return transform
-
-
-def transformer_flip():
-    transform = transforms.Compose([        
-        transforms.ToTensor(),
-        transforms.Normalize(
-            (0.5,),
-            (0.5,)
-        ),
-        transforms.RandomHorizontalFlip(p=1)
-        ]
-    )
-    logging.info(f'return data with flip')
-    return transform
-
-
-def transformer_grey():
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(
-            (0.5,),
-            (0.5,)
-        ),
-        transforms.RandomGrayscale(p=1)
-        ]
-    )
-    logging.info(f'return data with grey')
-    return transform
-
-
 
 
 def denormalize(tensor: torch.Tensor, mean=(0.5,), std=(0.5,)):
@@ -93,7 +76,7 @@ def denormalize(tensor: torch.Tensor, mean=(0.5,), std=(0.5,)):
 
     denormalized_tensor = torch.clamp(denormalized_tensor, 0, 255)
 
-    return denormalized_tensor
+    return denormalized_tensor.to(torch.uint8)
 
 
 
@@ -124,33 +107,39 @@ if __name__ == '__main__':
 
     os.makedirs(root,exist_ok=True)
 
-    train_dataset = FashionMNIST(root=root,train=True, download=True,transform= transformer())
-    test_dataset = FashionMNIST(root=root,train=False, download=True, transform= transformer())
-
-    np.random.seed(123)
-    index_sample = np.random.choice(len(train_dataset), 10000, replace=True)
-
-    train_dataset_trans1 = FashionMNIST(root=root,train=True, download=True,transform= transformer_flip())
-    train_dataset_trans1 = Subset(train_dataset_trans1,index_sample)
+    train_transformer = transformer(is_train= True)
+    val_transformer = transformer(is_train= False)
+    test_transformer = transformer(is_train= False)
 
 
-    train_dataset_trans2 = FashionMNIST(root=root,train=True, download=True,transform= transformer_grey())
-    train_dataset_trans2 = Subset(train_dataset_trans2,index_sample)
+    full_train_dataset = FashionMNIST(root=root,train=True, download=True,transform= None)
 
-    train_dataset = ConcatDataset([train_dataset,
-                                   train_dataset_trans1,
-                                   train_dataset_trans2
-                                   ])
+    len_full_train_dataset = len(full_train_dataset)
+    len_val_dataset = 4000
+    len_train_dataset = len_full_train_dataset - len_val_dataset
+
+    index_train_dataset, index_val_dataset = random_split(
+        range(len_full_train_dataset), 
+        lengths= [len_train_dataset,len_val_dataset],
+        generator= torch.Generator.manual_seed(123)
+        )
+
+    train_dataset = FashionMNIST(root=root,train=True, download=False,transform= train_transformer)
+    train_dataset = Subset(train_dataset, index_train_dataset)
+
+    val_dataset = FashionMNIST(root=root,train=True, download=False,transform= val_transformer)
+    val_dataset = Subset(val_dataset, index_val_dataset)
+
+    test_dataset = FashionMNIST(root=root,train=False, download=True, transform= test_transformer) 
     
-    train_dataset, validation_dataset = random_split(train_dataset,lengths=[len(train_dataset)-10000,10000])
 
     logging.info(f'train_dataset has {len(train_dataset)} items')
-    logging.info(f'validation_dataset has {len(validation_dataset)} items')
+    logging.info(f'validation_dataset has {len(val_dataset)} items')
     logging.info(f'test_dataset has {len(test_dataset)} items')
 
 
-    train_dataloader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True, num_workers=8)
-    validation_dataloader = DataLoader(dataset=validation_dataset, batch_size=16, shuffle=True, num_workers=8)
+    train_dataloader = DataLoader(dataset=train_dataset, batch_size=23, shuffle=True, num_workers=8)
+    val_dataloader = DataLoader(dataset=val_dataset, batch_size=16, shuffle=True, num_workers=8)
     test_dataloader = DataLoader(dataset=test_dataset, batch_size=16, shuffle=False)
 
     if False:
@@ -179,6 +168,7 @@ if __name__ == '__main__':
     logging.info(f'loading model : {model}')
 
     history = {
+    'epoch_no':[],
     'train_loss': [], 
     'train_accuracy': [],
     'validation_loss': [],
@@ -206,7 +196,7 @@ if __name__ == '__main__':
 
     history, per_batch_metrics = train_model(model=model,
                                              train_loader=train_dataloader,
-                                             val_loader=validation_dataloader,
+                                             val_loader=val_dataloader,
                                              optimizer=optimizer,
                                              criterion=criterion,
                                              device=device,
@@ -282,3 +272,5 @@ if __name__ == '__main__':
 
         logging.info(f'Model saved to: {CHECKPOINT_PATH}')
 # %%
+    if True:
+        transforms.ToPILImage()

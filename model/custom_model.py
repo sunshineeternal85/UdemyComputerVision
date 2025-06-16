@@ -279,7 +279,7 @@ def train_model(model: nn.Module,
 
                 z = model(x_train) # Forward pass
                 loss = criterion(z, y_train) # Calculate loss
-                loss.backward() # Backward pass
+                loss.backward() # Backward pass 
                 optimizer.step() # Update model parameters
 
                 # Calculate metrics for the CURRENT BATCH
