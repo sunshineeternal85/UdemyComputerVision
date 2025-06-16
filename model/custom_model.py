@@ -114,7 +114,7 @@ class Net_bn_1(nn.Module):
         self.fc2 = nn.Linear(128,10)
 
     def forward(self,x):
-        logging.debug(f'Input shape: {x.shape}') # 28*28
+        logging.debug(f'Input shape: {x.shape}') # 28*28 
         
         x = self.conv1(x)
         x = self.bn1(x)
