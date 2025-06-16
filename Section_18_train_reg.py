@@ -33,15 +33,16 @@ def transformer(is_train: bool = True):
     if is_train:
         transform = transforms.Compose([
             transforms.RandomHorizontalFlip(p=0.25),
-            transforms.RandomRotation(degrees=(-15,15), p=0.25),
-            transforms.RandomAdjustSharpness(p=0.25),
+            transforms.RandomRotation(degrees=(-15,15)),
+            transforms.RandomAdjustSharpness(sharpness_factor=1.5,p=0.25),
+            transforms.RandomAdjustSharpness(sharpness_factor=0.5,p=0.25),
             transforms.RandomGrayscale(p=0.25),
             transforms.ToTensor(),
             transforms.Normalize(
                 (0.5,),
                 (0.5,)
             ),
-            ]
+            ] 
         )
         logging.info(f'return train data with data augmentation, then to tensor and normalised')
     else:
@@ -100,6 +101,11 @@ def imshow(image_tensor:torch.Tensor, ax=None):
 
 if __name__ == '__main__':
 
+    no_threads = os.cpu_count() // 2
+    
+    no_threads = max(1, no_threads-1)
+    logging.info(f'Number of threads set to: {no_threads}')
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
@@ -118,10 +124,11 @@ if __name__ == '__main__':
     len_val_dataset = 4000
     len_train_dataset = len_full_train_dataset - len_val_dataset
 
+    my_generator = torch.Generator().manual_seed(3)
     index_train_dataset, index_val_dataset = random_split(
         range(len_full_train_dataset), 
         lengths= [len_train_dataset,len_val_dataset],
-        generator= torch.Generator.manual_seed(123)
+        generator= my_generator
         )
 
     train_dataset = FashionMNIST(root=root,train=True, download=False,transform= train_transformer)
@@ -138,9 +145,24 @@ if __name__ == '__main__':
     logging.info(f'test_dataset has {len(test_dataset)} items')
 
 
-    train_dataloader = DataLoader(dataset=train_dataset, batch_size=23, shuffle=True, num_workers=8)
-    val_dataloader = DataLoader(dataset=val_dataset, batch_size=16, shuffle=True, num_workers=8)
-    test_dataloader = DataLoader(dataset=test_dataset, batch_size=16, shuffle=False)
+    train_dataloader = DataLoader(
+        dataset=train_dataset, 
+        batch_size=128, 
+        shuffle=True, 
+        num_workers=no_threads, 
+        pin_memory=True)
+    val_dataloader = DataLoader(
+        dataset=val_dataset, 
+        batch_size=16, 
+        shuffle=True, 
+        num_workers=no_threads, 
+        pin_memory=True)
+    test_dataloader = DataLoader(
+        dataset=test_dataset, 
+        batch_size=16, 
+        shuffle=False,
+        num_workers=no_threads, 
+        pin_memory=True)
 
     if False:
         fig, ax = plt.subplots(3,3, figsize=(4,4))
@@ -181,7 +203,7 @@ if __name__ == '__main__':
     }
 
 
-    saved_model_path = './fmnist_model_transformers/model_StdBn_fmnist_checkpoint_epoch_019_2025-06-14_19-19-27.pth'
+    saved_model_path = './fmnist_model_transformers/model_StdBn_fmnist_checkpoint_epoch_005_2025-06-14_20-01-08.pth'
     
     if os.path.exists(saved_model_path):
         checkpoint = torch.load(saved_model_path)

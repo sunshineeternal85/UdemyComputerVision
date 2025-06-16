@@ -114,43 +114,43 @@ class Net_bn_1(nn.Module):
         self.fc2 = nn.Linear(128,10)
 
     def forward(self,x):
-        logging.debug(f'Input shape: {x.shape}') # 28*28 
+        #logging.debug(f'Input shape: {x.shape}') # 28*28 
         
         x = self.conv1(x)
         x = self.bn1(x)
         x = F.relu(x)
         x = self.drop1(x)  # Apply dropout after first conv layer 
-        logging.debug(f'after conv1 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
+        #logging.debug(f'after conv1 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
         
         x = self.conv2(x)
         x = self.bn2(x)
         x = F.relu(x)
         x = self.drop2(x)  # Apply dropout after second conv layer
-        logging.debug(f'after conv2 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
+        #logging.debug(f'after conv2 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
 
         x = self.conv3(x)
         x = self.bn3(x)
         x = F.relu(x)
         x = self.drop3(x)
-        logging.debug(f'after conv3 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
+        #logging.debug(f'after conv3 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
 
         x = self.conv4(x)
         x = self.bn4(x)
         x = F.relu(x)
         x = self.drop4(x)
-        logging.debug(f'after conv4 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
+        #logging.debug(f'after conv4 shape: {x.shape}') # (28+2*1-3)/1 + 1 , 28*28
 
         x = self.pool(x)
-        logging.debug(f'after maxpool shape: {x.shape}') # 28/2 , 14*14
+        #logging.debug(f'after maxpool shape: {x.shape}') # 28/2 , 14*14
 
         x = x.view(-1, 256*14*14)
-        logging.debug(f'After flatten: {x.shape}') #  50176
+        #logging.debug(f'After flatten: {x.shape}') #  50176
 
         x = F.relu(self.fc1(x))
-        logging.debug(f'After fc1: {x.shape}') # 128
+        #logging.debug(f'After fc1: {x.shape}') # 128
         
         x = self.fc2(x)
-        logging.debug(f'After fc2: {x.shape}') # 10
+        #logging.debug(f'After fc2: {x.shape}') # 10
 
         return x
 
@@ -301,10 +301,10 @@ def train_model(model: nn.Module,
                 per_batch_metrics['train_accuracy_batches'].append(per_batch_acc_current_batch)
                 per_batch_metrics['train_loss_batches'].append(loss.item()) # Current batch's scalar loss
 
-                logging.debug(f'e: {epoch} |'
-                             f'b: {train_b_i} |'
-                             f'loss {running_train_loss_epoch/(train_b_i+1)} |'
-                             f'acc:{per_batch_acc_current_batch}')
+                #logging.debug(f'e: {epoch} |'
+                #             f'b: {train_b_i} |'
+                #             f'loss {running_train_loss_epoch/(train_b_i+1)} |'
+                #             f'acc:{per_batch_acc_current_batch}')
 
 
             # Calculate EPOCH-LEVEL aggregated metrics
@@ -331,7 +331,7 @@ def train_model(model: nn.Module,
                     val_loss = criterion(z_val, y_val)
 
                     # Calculate validation metrics
-                    _, yhat_val = torch.max(z_val, 1)
+                    _, yhat_val = torch.max(z_val.data, 1)
                     correct_in_val_batch = (yhat_val == y_val).sum().item()
                     total_in_val_batch = len(y_val)
 
