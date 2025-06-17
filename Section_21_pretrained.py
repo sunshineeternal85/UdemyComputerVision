@@ -52,16 +52,19 @@ def denormalize(tensor: torch.Tensor, mean=(0.5,), std=(0.5,)):
     return denormalized_tensor.to(torch.uint8)
 
 def imshow(image: torch.Tensor, ax= None ):
-    if ax==None:
-        image_tensor_cpu = image.detach().cpu()
-        image_tensor_denorm = denormalize(image_tensor_cpu)
+    image_tensor_cpu = image.detach().cpu()
+    image_tensor_denorm = denormalize(image_tensor_cpu)
 
-        pil_image = transforms.ToPILImage()(image_tensor_denorm)
-        image_np = np.array(pil_image)
+    pil_image = transforms.ToPILImage()(image_tensor_denorm)
+    image_np = np.array(pil_image)
+
+    if ax==None:
+
         plt.imshow(image_np)
-        plt.show()
     else:
-        pass
+        ax.imshow(image_np)
+        ax.axis('off')
+
 
 def vgg_class():
     # 2. Define the URL for the ImageNet class labels file
@@ -123,7 +126,8 @@ if __name__ == '__main__':
 
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = models.vgg16(pretrained = True)
+    #model = models.vgg16(pretrained = True)
+    model = models.mobilenet_v3_small(pretrained = True)
     model.to(device)
 
     #print(summary(model,  input_size= (3,240,240)))
@@ -156,17 +160,34 @@ if __name__ == '__main__':
             x = x.to(device)
             y = y.to(device) 
             output = model(x)
+            
+            softmax_layer = torch.nn.Softmax(dim=1)
+            output_prob = softmax_layer(output)
+
             y_pred = torch.max(output,1)[1].cpu().numpy()
+            
+            print(torch.topk(output_prob[0],k=3))
+       
+            
             y_true = y.cpu().numpy()
             
             images = x.detach()
 
+            fig, axes = plt.subplots(2,2)
+            ax_flatten = axes.flatten()
+
+
             for index, image in enumerate(images):
                 #print(image)
-                imshow(image)
+                imshow(image, ax_flatten[index])
+
+
                 vgg_prediction_class = vgg_classes[y_pred[index]]
                 true_class = test_dataset.classes[y_true[index]]
                 logging.info(f'{vgg_prediction_class} predicted  vs {true_class}')
+            
+            plt.tight_layout()
+            plt.show()
 
 
             if i == 0:
