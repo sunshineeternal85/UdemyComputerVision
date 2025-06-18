@@ -4,6 +4,7 @@ import os, logging, importlib, sys, shutil
 
 import torchvision.models as models
 from torchvision import transforms, datasets
+from torchvision.models import MobileNet_V3_Small_Weights
 import torch
 from torch.utils.data import DataLoader
 from torchsummary import  summary
@@ -66,7 +67,9 @@ def imshow(image: torch.Tensor, ax= None ):
         ax.axis('off')
 
 
-def vgg_class():
+def imagenet_classes():
+    #1. define dict container of the classes and index
+    classes_dict = {}
     # 2. Define the URL for the ImageNet class labels file
     imagenet_labels_url = "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt"
     labels_filename = "imagenet_classes.txt"
@@ -87,10 +90,13 @@ def vgg_class():
 
     # 4. Read the class labels into a list
     with open(labels_filename, "r") as f:
-        imagenet_classes = [line.strip() for line in f]
+        classes_dict = {index:line.strip().lower() for index, line in enumerate(f)}
     
-    logging.info(f'{imagenet_classes}')
-    return imagenet_classes
+    logging.info(f'{classes_dict}')
+    return classes_dict
+
+
+
 
 
 # %%
@@ -124,20 +130,22 @@ if __name__ == '__main__':
                 except:
                     logging.info(f'cannot move the file {name}')
 
+    no_threads = max(1,os.cpu_count()-2)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    #model = models.vgg16(pretrained = True)
-    model = models.mobilenet_v3_small(pretrained = True)
+    
+    logging.info(f'{no_threads} cpu threads available, device set to {device}')
+    
+    model = models.mobilenet_v3_small(weights = MobileNet_V3_Small_Weights.DEFAULT)
+
     model.to(device)
 
-    #print(summary(model,  input_size= (3,240,240)))
+    logging.info(f'{model} loaded to {device}')
 
-
-
-# %%
     dataset_path = './images'
     test_dataset = datasets.ImageFolder(root=dataset_path, transform=transformer())
-    logging.info(f'{len(test_dataset) } data')
+    
+    logging.info(f'{len(test_dataset) } data in test dataset')
 
     if False:
         for index, (x,y) in enumerate(test_dataset):
@@ -147,50 +155,53 @@ if __name__ == '__main__':
                 break
     test_dataset = datasets.ImageFolder(root=dataset_path, transform=transformer())
 
-    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False, num_workers= no_threads)
 
     
-    print(test_dataset.classes)
+    logging.info(f'{test_dataset.classes} classes in dataloader test')
 
-    vgg_classes = vgg_class()
+    classes_from_model = imagenet_classes()
 
+
+    logging.info('start inference process from test dataset')
     model.eval()
     with torch.no_grad():
         for i, (x,y) in enumerate(test_dataloader):
-            x = x.to(device)
-            y = y.to(device) 
-            output = model(x)
-            
-            softmax_layer = torch.nn.Softmax(dim=1)
-            output_prob = softmax_layer(output)
+            if i == 15:
+                x = x.to(device)
+                y = y.to(device) 
+                output = model(x)
+                
+                softmax_layer = torch.nn.Softmax(dim=1)
+                output_prob = softmax_layer(output)
 
-            y_pred = torch.max(output,1)[1].cpu().numpy()
-            
-            print(torch.topk(output_prob[0],k=3))
-       
-            
-            y_true = y.cpu().numpy()
-            
-            images = x.detach()
+                y_pred = torch.max(output,1)[1].cpu().numpy()
+                
+                print(torch.topk(output_prob,k=3))
+        
+                
+                y_true = y.cpu().numpy()
+                
+                images = x.detach()
 
-            fig, axes = plt.subplots(2,2)
-            ax_flatten = axes.flatten()
-
-
-            for index, image in enumerate(images):
-                #print(image)
-                imshow(image, ax_flatten[index])
+                fig, axes = plt.subplots(2,2)
+                ax_flatten = axes.flatten()
 
 
-                vgg_prediction_class = vgg_classes[y_pred[index]]
-                true_class = test_dataset.classes[y_true[index]]
-                logging.info(f'{vgg_prediction_class} predicted  vs {true_class}')
-            
-            plt.tight_layout()
-            plt.show()
+                for index, image in enumerate(images):
+                    #print(image)
+                    imshow(image, ax_flatten[index])
 
 
-            if i == 0:
+                    class_prediction = classes_from_model[y_pred[index]]
+                    true_class = test_dataset.classes[y_true[index]].lower().replace('_', ' ')
+                    logging.info(f'predicted : [{class_prediction}] vs truth : [{true_class}]')
+                
+                plt.tight_layout()
+                plt.show()
+
+
+            if i == 16:
                 break
 
 
