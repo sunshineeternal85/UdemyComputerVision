@@ -163,4 +163,3 @@ class LitModel1(L.LightningModule):
 if __name__ == '__main__':
     pass
 
-# %%
