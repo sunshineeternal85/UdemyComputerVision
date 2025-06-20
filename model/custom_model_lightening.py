@@ -30,103 +30,137 @@ logging.basicConfig(level=logging.INFO, format=  '%(asctime)s - %(levelname)s: %
 
 # %%
 
-class LitModel(L.LightningModule):
-    def __init__(self, batch_size, train_dataset = None, val_dataset = None, test_dataset = None):
-        super(LitModel, self).__init__()
+def conv_block(in_channels, out_channels):
+    block = nn.Sequential(
+                            nn.Conv2d(in_channels=in_channels,
+                                    out_channels=out_channels,
+                                    kernel_size=3,
+                                    stride=1,
+                                    padding=1),
+                            nn.BatchNorm2d(num_features=out_channels),
+                            nn.ReLU(),
+                            nn.MaxPool2d(kernel_size=(2,2))
+                            )
+    return block
+
+
+
+
+class LitModel1(L.LightningModule):
+    def __init__(self, batch_size: int, num_class:int = 2, 
+                 train_dataset:Dataset = None, val_dataset:Dataset = None, test_dataset:Dataset = None):
+        super().__init__()
+        self.save_hyperparameters(ignore=['train_dataset', 'val_dataset', 'test_dataset'])
+
         self.batch_size = batch_size
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
         self.test_dataset = test_dataset
 
+        self.num_workers = max(1, os.cpu_count() //2)-2
+        self.num_workers_val_test = max(1, os.cpu_count() // 4)-2
 
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels=3,out_channels=16,kernel_size=3,stride=1,padding=1),
-            nn.BatchNorm2d(16),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2,stride=2)
-            )
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(in_channels=16,out_channels=32,kernel_size=3,stride=1,padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2,stride=2)
-            )
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(in_channels=32,out_channels=64,kernel_size=3,stride=1,padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2,stride=2)
-            )
-        self.fc1=nn.Sequential(nn.Flatten(), nn.Linear(64*28*28,256), nn.ReLU(), nn.Linear(256,128))
-        self.fc2= nn.Sequential(nn.Linear(128,2))
 
-    def forward(self, x):
-        # This is the forward pass where data flows through the layers
+        self.conv1 = conv_block(3, 16)
+        self.conv2 = conv_block(16, 32)
+        self.conv3 = conv_block(32, 64)
+
+        self.fc1   = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(64*28*28,256),
+            nn.ReLU(),
+            nn.Linear(256,128),
+            nn.ReLU()
+            )
+        self.fc2   = nn.Sequential(
+            nn.Linear(128,num_class)
+            )
+
+        self.criterion = nn.CrossEntropyLoss() 
+
+
+    def forward(self,x):
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
-        # x is now (batch_size, 64, 28, 28)
         x = self.fc1(x)
-        # x is now (batch_size, 128)
         logits = self.fc2(x)
-        # logits is now (batch_size, 2)
         return logits
+        
+
     
-    # --- Essential PyTorch Lightning Methods ---
-
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x) # Call the forward method
-        loss = F.cross_entropy(logits, y) # Use CrossEntropyLoss for classification
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
-        # You might also want to log accuracy
-        # preds = torch.argmax(logits, dim=1)
-        # acc = (preds == y).float().mean()
-        # self.log("train_acc", acc, on_step=True, on_epoch=True, prog_bar=True)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.cross_entropy(logits, y)
-        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True) # Log epoch-wise validation
-        # preds = torch.argmax(logits, dim=1)
-        # acc = (preds == y).float().mean()
-        # self.log("val_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
-        return loss # Return loss is good for early stopping callbacks
-
-    def test_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.cross_entropy(logits, y)
-        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        # preds = torch.argmax(logits, dim=1)
-        # acc = (preds == y).float().mean()
-        # self.log("test_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
-        return loss
-    
-    # These methods should RETURN DataLoader instances
-
     def train_dataloader(self):
-        # Ensure self.train_dataset is not None before creating DataLoader
-        if self.train_dataset is None:
-            raise ValueError("train_dataset must be provided to LitModel for training.")
-        return DataLoader(self.train_dataset, batch_size=self.hparams.batch_size, shuffle=True, num_workers=os.cpu_count() // 2)
-
+        return DataLoader(
+            dataset= self.train_dataset,
+            batch_size= self.batch_size, 
+            shuffle=True,
+            num_workers=self.num_workers,
+            pin_memory=True 
+            )
+        
     def val_dataloader(self):
-        if self.val_dataset is None:
-            # You might choose to skip validation or raise an error
-            print("Warning: val_dataset not provided. Skipping validation dataloader.")
-            return None # Or raise ValueError("val_dataset must be provided...")
-        return DataLoader(self.val_dataset, batch_size=self.hparams.batch_size, shuffle=False, num_workers=os.cpu_count() // 2)
-
+        return DataLoader(
+            dataset= self.val_dataset,
+            batch_size= self.batch_size, 
+            shuffle=False,
+            num_workers=self.num_workers_val_test,
+            pin_memory=True 
+            )
+    
     def test_dataloader(self):
-        if self.test_dataset is None:
-            print("Warning: test_dataset not provided. Skipping test dataloader.")
-            return None # Or raise ValueError("test_dataset must be provided...")
-        return DataLoader(self.test_dataset, batch_size=self.hparams.batch_size, shuffle=False, num_workers=os.cpu_count() // 2)
+        return DataLoader(
+            dataset= self.test_dataset,
+            batch_size= self.batch_size, 
+            shuffle=False,
+            num_workers=self.num_workers_val_test,
+            pin_memory=True 
+            )
+    
+    
+    def training_step(self, batch, batch_idx):
+        data, label = batch
+        output = self(data)
+        preds = torch.argmax(input=output, dim = 1)
+        accuracy = (preds==label).float().mean()
 
+        loss = self.criterion(input=output, target=label)
+
+        self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('train_accuracy', accuracy, prog_bar=True, on_step=True, on_epoch=True)
+
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        data, label = batch
+        output = self(data)
+        preds = torch.argmax(input=output, dim = 1)
+        accuracy = (preds==label).float().mean()
+
+        loss = self.criterion(input=output, target=label)
+
+        self.log('validation_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('validation_accuracy', accuracy, prog_bar=True, on_step=True, on_epoch=True)
+
+        return loss
+    
+    def test_step(self, batch, batch_idx):
+        data, label = batch
+        output = self(data)
+        preds = torch.argmax(input=output, dim = 1)
+        accuracy = (preds==label).float().mean()
+
+        loss = self.criterion(input=output, target=label)
+
+        self.log('test_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('test_accuracy', accuracy, prog_bar=True, on_step=True, on_epoch=True)
+
+        return loss
+    
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr =0.001)
 
 
 if __name__ == '__main__':
-    L.LightningModule.test_step
+    pass
+
+# %%
