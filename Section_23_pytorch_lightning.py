@@ -21,7 +21,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageErrimportor
 import lightning as L
 
 
