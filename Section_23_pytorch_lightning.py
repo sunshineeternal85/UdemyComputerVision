@@ -21,7 +21,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image, UnidentifiedImageErrimportor
+from PIL import Image, UnidentifiedImageError
 import lightning as L
 
 
@@ -173,15 +173,18 @@ if __name__ == '__main__':
         verbose=True           # Log when a new best model is saved
     )
 
+#%%
     model = LitModel1(batch_size=48,
                       num_class=len(class_names), # Explicitly pass num_class for clarity
                       train_dataset=train_dataset,
                       val_dataset=val_dataset,    # Pass val_dataset
                       test_dataset=test_dataset) 
 
+    
 
 
 
+#%%
 
     trainer = L.Trainer(
         accelerator=device,       # Specify accelerator (cuda or cpu)
@@ -192,6 +195,10 @@ if __name__ == '__main__':
             EarlyStopping(monitor="validation_loss_epoch", mode="min", patience=4),
             checkpoint_callback]
     )
+
+
+#%%
+
 
     logging.info("Starting model training...")
     trainer.fit(model)

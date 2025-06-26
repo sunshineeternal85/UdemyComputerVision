@@ -52,7 +52,6 @@ def image_show(image: np.ndarray, ax=None):
     else:
         ax.imshow(image, cmap='gray')
 
-# %%
 
 
 if __name__ == '__main__':
@@ -90,7 +89,7 @@ if __name__ == '__main__':
     logging.info(f'classes: {CLASSES}')
 
 
-    PATH_TO_MODEL = './fmnist_model_transformers/model_StdBn_fmnist_checkpoint_epoch_005_2025-06-14_20-01-08.pth'
+    PATH_TO_MODEL = './fmnist_model_transformers/model_Avg_mnist_checkpoint_epoch_019_2025-06-09_19-38-18.pth'
 
     model = Net_bn_1()
     model_save = torch.load(PATH_TO_MODEL, map_location=torch.device('cpu'))
