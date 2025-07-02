@@ -173,7 +173,7 @@ if __name__ == '__main__':
         pin_memory=True)
     val_dataloader = DataLoader(
         dataset=val_dataset, 
-        batch_size=16, 
+        batch_size=512, 
         shuffle=True, 
         num_workers=no_threads, 
         pin_memory=True)
