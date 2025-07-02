@@ -106,8 +106,28 @@ if __name__ == '__main__':
     no_threads = max(1, no_threads-1)
     logging.info(f'Number of threads set to: {no_threads}')
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    num_gpus = torch.cuda.device_count()
+    logging.info(f'{num_gpus} gpu available')
+    
+    for i in range(num_gpus):
+        logging.info(f"\n--- GPU {i} ---")
+        # Get the device object
+        device = torch.device(f"cuda:{i}")
+        logging.info(f"Device Name: {torch.cuda.get_device_name(i)}")
 
+    # Get total memory (in GB)
+    total_memory_bytes = torch.cuda.get_device_properties(i).total_memory
+    total_memory_gb = total_memory_bytes / (1024**3)
+    logging.info(f"Total Memory: {total_memory_gb:.2f} GB")
+
+
+    device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
+    logging.info(f'using {device}')
+
+
+
+# %%
 
     root = '/media/laurent/SSD2/dataset/fmnist'
 
@@ -147,7 +167,7 @@ if __name__ == '__main__':
 
     train_dataloader = DataLoader(
         dataset=train_dataset, 
-        batch_size=128, 
+        batch_size=512, 
         shuffle=True, 
         num_workers=no_threads, 
         pin_memory=True)
