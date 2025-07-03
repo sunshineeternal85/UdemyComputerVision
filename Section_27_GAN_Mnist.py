@@ -15,6 +15,12 @@ from torchvision.datasets import MNIST
 import numpy as np
 import matplotlib.pyplot as plt
 
+from PIL import Image
+
+import datetime
+timestamp = datetime.datetime.now().isoformat()
+
+
 # %%
 def init_logs():
     log_dir = os.path.join(os.path.abspath(os.getcwd()),'logs','GAN')
@@ -159,7 +165,9 @@ def weights_init(m):
 #%%
 if __name__ == '__main__':
     init_logs()
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
+    logging.info(f'using {device}')
 
     num_device = torch.cuda.device_count()
 
@@ -215,9 +223,12 @@ if __name__ == '__main__':
 #%%
     if True: 
         for epoch in range(epochs):
+            total_g_count_success = 0
+            total_g_count = 0
+            logging.info(f'Epoch: {epoch+1}/{epochs}')
             for n, (real_samples, _) in enumerate(train_loader):
                 # generator process for initial data
-                logging.info(f'Epoch: {epoch+1}/{epochs} - Batch: {n+1}/{len(train_loader)}')
+                #logging.info(f'Epoch: {epoch+1}/{epochs} - Batch: {n+1}/{len(train_loader)}')
 
                 # get real data to device
                 real_samples = real_samples.to(device=device)
@@ -243,7 +254,8 @@ if __name__ == '__main__':
                 # calculate loss
                 loss_dis = dis_criterion(logits_dis, all_labels)
                 loss_d_batch = loss_dis.item()
-                logging.info(f'Loss Discriminator batch - {n}: {loss_d_batch:.4f}')
+                
+                #logging.info(f'Loss Discriminator batch - {n}: {loss_d_batch:.4f}')
                 # backpropagation
                 loss_dis.backward()
                 optim_dis.step()
@@ -262,23 +274,85 @@ if __name__ == '__main__':
                 loss_gen = dis_criterion(logits_gen, generator_target_labels) # <-- CORRECTED
 
                 loss_g_batch = loss_gen.item()
-                logging.info(f'Loss Generator batch - {n}: {loss_g_batch:.4f}')
+
+
+                binary_predictions_for_gen_samples = (logits_gen.detach() >= 0.5).float() # 1
+                
+                # Count how many of these were predicted as 'real' (which is the generator's goal)
+                total_g_count_success += (binary_predictions_for_gen_samples == 1).sum().item()
+                total_g_count += batch_size # Each batch adds `batch_size` samples to the total count
+
+                #logging.info(f'Loss Generator batch - {n}: {loss_g_batch:.4f}')
                 # backpropagation
                 loss_gen.backward()
                 optim_gen.step()
 
-                
-                logging.info(f'epoch {n}, Loss Discriminator: {loss_dis.item():.4f} - Loss Generator: {loss_gen.item():.4f}')
-                    # visualize generated images
-                    #fig, ax = plt.subplots(3,3)
-                    #ax_flatten = ax.flatten()
+            if total_g_count > 0: # Avoid division by zero
+                gen_success_accuracy = total_g_count_success / total_g_count
+            else:
+                gen_success_accuracy = 0.0
 
-                    #for i in range(len(ax_flatten)):
-                    #    image = generated_samples[i]
-                    #    label_idx = 0
+            logging.info(f'epoch {epoch}, Loss Discriminator: {loss_dis.item():.4f} - Loss Generator: {loss_gen.item():.4f}')
+            logging.info(f'epoch {epoch}, Accuracy Success Generator: {gen_success_accuracy.item():.4f}')
+
+
+    saved_model_path = './mnist_gan/'
+
+    os.makedirs(saved_model_path, exist_ok=True)
+    
+    torch.save(
+        {
+            'epoch': epoch,
+            'model_d_state_dict': init_discriminator.state_dict(),
+            'optimizer_d_state_dict': optim_dis.state_dict(),
+            'model_g_state_dict': init_generator.state_dict(),
+            'optimizer_g_state_dict': optim_gen.state_dict(),
+            'loss_d': loss_dis.item(),
+            'loss_g': loss_gen.item(),
+            'accuracy_g': gen_success_accuracy.item(),
+            'save_timestamp': timestamp, # Ensure 'timestamp' is defined (e.g., datetime.now().isoformat())
+        },
+        f"{saved_model_path}gan_checkpoint_epoch_{epoch+1}.pt" # <-- Missing filename here!
+    )
+
+
                     
+# %%
+    if True:
+        # Generate new samples specifically for visualization
+        num_samples_to_display = 9 # For a 3x3 grid
+        latent_space_samples_for_viz = torch.randn(num_samples_to_display, latent_dim).to(device=device)
+        
+        # Set generator to evaluation mode and disable gradient calculations
+        init_generator.eval() 
+        with torch.no_grad():
+            samples_to_display = init_generator(latent_space_samples_for_viz).cpu() # Move to CPU for Matplotlib
+        init_generator.train() # Set generator back to training mode if you continue training
 
- 
+        # Visualize generated images
+        fig, ax = plt.subplots(3, 3, figsize=(6, 6)) # Added figsize for better display
+        ax_flatten = ax.flatten()
 
+        for i in range(len(ax_flatten)):
+            # Reshape the flattened image to its original 2D shape (e.g., 28x28 for MNIST)
+            # Assuming your generated images are 784-dimensional and grayscale
+            image = samples_to_display[i].reshape(28, 28) 
+            
+            # Pass an empty string or a generic label for generated samples
+            # You might need to adapt this based on how tensor_imshow handles labels
+            # If tensor_imshow requires class_names, define a dummy one:
+            # class_names_gen = ["Generated Image"] 
+            
+            tensor_imshow(image=image,  
+                        label_idx=0, # Or simply omit if tensor_imshow is flexible
+                        class_names=["Generated"], # A dummy class name for display
+                        is_normalize=True, 
+                        ax=ax_flatten[i])
+            
+            # Optionally, set titles manually if tensor_imshow doesn't handle it the way you want
+            ax_flatten[i].set_title(f"Generated {i+1}")
+            ax_flatten[i].axis('off') # Turn off axes for cleaner image display
 
+        plt.tight_layout() # Adjust subplot params for a tight layout
+        plt.show() # Display the plot
 # %%
