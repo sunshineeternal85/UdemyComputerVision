@@ -12,14 +12,8 @@ from torch.utils.data import DataLoader, Dataset, random_split, Subset, ConcatDa
 
 from torchvision import transforms
 from torchvision.datasets import MNIST
-import torchvision.models as models
 import numpy as np
 import matplotlib.pyplot as plt
-
-import requests
-from PIL import Image, ImageFilter,ImageChops
-from io import BytesIO
-
 
 # %%
 def init_logs():
@@ -30,44 +24,6 @@ def init_logs():
     log_filename = os.path.join(log_dir,'log_main.log')
 
     logging.basicConfig(level=logging.INFO, filename = log_filename ,  format=  '%(asctime)s - %(levelname)s: %(lineno)d - %(funcName)s - %(message)s')
-
-
-
-class Custom_Dataset():
-    def __init__(self, root_path: str, transform: Callable = None):
-        self.root_path = root_path
-        self.transform = transform
-        self.filenames_list = self._list_path_file(self.root_path)
-
-
-    def _list_path_file(self,root_path):
-        filenames_list = []        
-        for root,_,  filenames in os.walk(root_path):
-            for filename in filenames:
-                filename_path = os.path.join(root,filename)
-                filenames_list.append(filename_path)
-
-        filenames_list.sort()
-        return filenames_list
-
-    def __len__(self):
-        return len(self.filenames_list)
-
-    def __getitem__(self, idx:int):
-        imgpath = self.filenames_list[idx]
-        folder_class = os.path.basename(os.path.dirname(imgpath))
-        img = Image.open(imgpath).convert('RGB')
-        logging.info(folder_class)
-        if 'dog' in str(folder_class).lower():
-            label = 1
-        else:
-            label = 0
-
-        if self.transform:
-            img = self.transform(img) 
-
-        return (img, label)
-
 
 class To_Tensor():
     def __call__(self, img_PIL: Image.Image):
@@ -88,7 +44,6 @@ def transformer_base():
     ])
     return transformer
 
-
 def transformer_aug()-> Callable:
     transformer = transforms.Compose([
         transforms.Resize(size=(224,224)),
@@ -106,16 +61,9 @@ def denormalize(img: torch.Tensor)-> torch.Tensor:
     mean_tensor = torch.tensor(mean, dtype=torch.float32).view(-1,1,1)
     std_tensor = torch.tensor(std, dtype=torch.float32).view(-1,1,1)
     img = img.detach().cpu()
-
-    img_denormalize = torch.clamp((img * std_tensor + mean_tensor)* 255,min=0,max= 255)
+    img_denormalize = torch.clamp((img * std_tensor + mean_tensor)* 255, min=0, max= 255)
 
     return img_denormalize.to(torch.uint8)
-
-def pil_loader(path: str) -> Image.Image:
-    with open(path, 'rb') as f:
-        img = Image.open(f)
-        return img.convert('RGB')
-
 
 def tensor_imshow(image: torch.Tensor,  label_idx: int, class_names: List[str],is_normalize:bool=False ,ax =None):
     image = image.detach().cpu()
@@ -169,8 +117,6 @@ class Discriminator(nn.Module):
         logits = self.model(x)
         return logits
 
-
-
 class Generator(nn.Module):
     def __init__(self):
         super().__init__()
@@ -191,9 +137,8 @@ class Generator(nn.Module):
 
     def forward(self, x): 
         logits = self.model(x)
-        img = logits.view(x.size(0), 1, 28, 28) # Example
+        img = logits.view(x.size(0), 1, 28, 28) #  Reshapes 784 pixels to 1x28x28 image
         return img
-
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -205,8 +150,10 @@ def weights_init(m):
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         # Initialize BatchNorm bias with zeros
         nn.init.constant_(m.bias.data, 0)
-
-
+    elif classname.find('Linear') != -1: # Correct: Added initialization for Linear layers
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+        if m.bias is not None:
+            nn.init.constant_(m.bias.data, 0)
 
 
 #%%
@@ -220,13 +167,6 @@ if __name__ == '__main__':
 
     path = './SSD2/dataset/mnist'
     full_dataset = MNIST(root= path,train=True, transform=transformer_base(),download=True)
-
-    np.random.seed(42)
-    #full_dataset_aug = Custom_Dataset(train_dir, transform=transformer_aug())
-    #train_dataset_aug_ind = np.random.choice(range(len(full_dataset_aug)), size=2000, replace=False)
-    #train_dataset_aug = Subset(full_dataset_aug, indices= train_dataset_aug_ind)
-
-    #full_dataset = ConcatDataset(datasets=[full_dataset,train_dataset_aug])
 
     train_loader = DataLoader(full_dataset, batch_size=32, shuffle=True)
 
@@ -254,28 +194,90 @@ if __name__ == '__main__':
                           is_normalize=True ,
                           ax =ax_flatten[i])
     
+
+
 # %%
     init_discriminator = Discriminator().to(device=device)
     init_generator = Generator().to(device=device)
 
-#%%
+    init_discriminator.apply(weights_init)
+    init_generator.apply(weights_init)
 
     epochs = 20        # Number of training epochs
     batch_size = 32    # Batch size for training
     lr_g = 0.0002      # Learning rate for the Generator
     lr_d = 0.0002      # Learning rate for the Discriminator
-    criterion = nn.BCELoss()  
-    optim_gen = torch.optim.Adam(init_generator.parameters(),lr=lr_g)
-    optim_dis = torch.optim.Adam(init_discriminator.parameters(),lr=lr_d)
+    dis_criterion = nn.BCELoss()  
+    optim_gen = optim.Adam(init_generator.parameters(),lr=lr_g)
+    optim_dis = optim.Adam(init_discriminator.parameters(),lr=lr_d)
 
 
 #%%
     if True: 
         for epoch in range(epochs):
-            for i, (samples, labels) in enumerate(train_loader):
-                samples = samples.to(device=device)
-                labels = labels.to(device=device)
-                latent_space_samples = torch.rand(size=(batch_size,100)).to(device=device)
+            for n, (real_samples, _) in enumerate(train_loader):
+                # generator process for initial data
+                logging.info(f'Epoch: {epoch+1}/{epochs} - Batch: {n+1}/{len(train_loader)}')
+
+                # get real data to device
+                real_samples = real_samples.to(device=device)
+                real_discriminator_labels = torch.ones(batch_size,1).to(device=device)
+                
+                # Generate fake images, and labels to device
+                latent_dim = 100 # Or whatever your chosen latent space dimension is
+                latent_space_samples_for_D = torch.randn(batch_size, latent_dim).to(device=device)
+
+                # Generate fake images using the generator
+                generated_samples = init_generator(latent_space_samples_for_D)
+                fake_discriminator_labels = torch.zeros(batch_size,1).to(device=device)
+                
+                # combine real and fake data
+                all_samples = torch.cat((real_samples, generated_samples.detach()), dim=0)
+                all_labels = torch.cat((real_discriminator_labels, fake_discriminator_labels), dim=0)
+                
+                ## init_discriminator ##
+                # train discriminator
+                init_discriminator.train()
+                optim_dis.zero_grad()
+                logits_dis = init_discriminator(all_samples)
+                # calculate loss
+                loss_dis = dis_criterion(logits_dis, all_labels)
+                loss_d_batch = loss_dis.item()
+                logging.info(f'Loss Discriminator batch - {n}: {loss_d_batch:.4f}')
+                # backpropagation
+                loss_dis.backward()
+                optim_dis.step()
+                
+                # data for generator
+                latent_space_samples_for_G = torch.randn(batch_size, latent_dim).to(device=device)
+
+                ## init_generator ##
+                # train generator
+                init_generator.train()
+                optim_gen.zero_grad()
+                generated_samples_for_G = init_generator(latent_space_samples_for_G)
+                logits_gen = init_discriminator(generated_samples_for_G)
+                # calculate loss
+                generator_target_labels = torch.ones(batch_size, 1).to(device=device)
+                loss_gen = dis_criterion(logits_gen, generator_target_labels) # <-- CORRECTED
+
+                loss_g_batch = loss_gen.item()
+                logging.info(f'Loss Generator batch - {n}: {loss_g_batch:.4f}')
+                # backpropagation
+                loss_gen.backward()
+                optim_gen.step()
+
+                
+                logging.info(f'epoch {n}, Loss Discriminator: {loss_dis.item():.4f} - Loss Generator: {loss_gen.item():.4f}')
+                    # visualize generated images
+                    #fig, ax = plt.subplots(3,3)
+                    #ax_flatten = ax.flatten()
+
+                    #for i in range(len(ax_flatten)):
+                    #    image = generated_samples[i]
+                    #    label_idx = 0
+                    
+
  
 
 
