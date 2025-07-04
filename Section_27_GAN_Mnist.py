@@ -1,13 +1,13 @@
 #%% 
-import os, logging, sys
-from typing import List, Callable, Dict
-import math
+import os, logging
+from typing import List, Callable
+
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset, random_split, Subset, ConcatDataset
+from torch.utils.data import DataLoader, Dataset, Subset, ConcatDataset
 
 
 from torchvision import transforms
@@ -19,10 +19,9 @@ from PIL import Image
 
 import datetime
 
-import torchsummary
 
 
-# %%
+
 def init_logs():
     log_dir = os.path.join(os.path.abspath(os.getcwd()),'logs','GAN')
 
@@ -80,7 +79,7 @@ def tensor_imshow(image: torch.Tensor,  label_idx: int, class_names: List[str],i
         image_denorm = image
     
     image_np = image_denorm.to(torch.uint8).numpy().transpose(1,2,0)
-    title_text = f'{class_names[label_idx]} - lab_ind: {label_idx}' 
+    title_text = f'{class_names[label_idx]}- : {label_idx}' 
 
     if ax==None:
         plt.imshow(image_np, cmap='gray')
@@ -173,9 +172,11 @@ if __name__ == '__main__':
     logging.info(f'{device}-{num_device}')
 
     path = './SSD2/dataset/mnist'
+    batch_size = 5000
+
     full_dataset = MNIST(root= path,train=True, transform=transformer_base(),download=True)
 
-    train_loader = DataLoader(full_dataset, batch_size=32, shuffle=True)
+    train_loader = DataLoader(full_dataset, batch_size=batch_size, shuffle=True)
 
     if False: # option for displaying sample of image
         fig, ax = plt.subplots(3,3)
@@ -197,7 +198,7 @@ if __name__ == '__main__':
                           label_idx= label_idx, 
                           class_names= class_names,
                           is_normalize=True ,
-                          ax =ax_flatten[i])
+                          ax =ax_flatten[i])    
     
 
     logging.info(f'init the models g and d')
@@ -208,8 +209,8 @@ if __name__ == '__main__':
     model_d.apply(weights_init)
     model_g.apply(weights_init)
 
+
     epochs = 20        # Number of training epochs
-    batch_size = 32    # Batch size for training
     lr_g = 0.0002      # Learning rate for the Generator
     lr_d = 0.0002      # Learning rate for the Discriminator
     criterion = nn.BCELoss()  
@@ -217,25 +218,50 @@ if __name__ == '__main__':
     optim_d = optim.Adam(model_d.parameters(),lr=lr_d)
     optim_g = optim.Adam(model_g.parameters(),lr=lr_g)
 
-    model_d_summary = torchsummary.summary(model_d, input_size=(1, 28, 28) , device='cuda')
-    model_g_summary = torchsummary.summary(model_g, input_size=(100,), device='cuda')
+
+
+    checkpoint_path = './mnist_gan'
+
+    if os.path.isdir(checkpoint_path):
+        list_saved = os.listdir(checkpoint_path)
+        list_saved.sort()
+        backup_file_name = list_saved[-1] 
+        full_checkpoint_path = os.path.join(checkpoint_path, backup_file_name)
+
+        model_static = torch.load(full_checkpoint_path, map_location=device)
+        model_static_d = model_static['model_d_state_dict']
+        model_static_g = model_static['model_g_state_dict']
+        model_static_g = model_static['model_g_state_dict']
+        optim_d.load_state_dict(model_static['optimizer_d_state_dict'])
+        optim_g.load_state_dict(model_static['optimizer_g_state_dict'])
+
+        model_d.load_state_dict(model_static_d)
+        model_g.load_state_dict(model_static_g)
+
+        model_d.to(device=device)
+        model_g.to(device=device)
+        logging.info(f'loading {backup_file_name}')
+
+
 
     logging.info(f'model d:') # No newline at the end of the string here
-    print(f'{model_d_summary}') # No newline at the end of the string here
+    print(f'{model_d}') # No newline at the end of the string here
     logging.info('') # This will create an empty log record, effectively a blank line
 
     logging.info(f'model g:') # No newline
-    print(f'{model_g_summary}') # No newline
+    print(f'{model_g}') # No newline
     logging.info('') # Another blank line
     
 
-#%%
     if True: 
         for epoch in range(epochs):
             total_g_count_success = 0
             total_g_count = 0
-            logging.info(f'Epoch: {epoch+1}/{epochs}')
+            logging.info(f'Epoch: {epoch}/{epochs}')
             for batch_idx, (real_samples, _) in enumerate(train_loader):
+
+                #current_batch_size = real_samples.size(0) 
+
                 # generator process for initial data
                 # not using the labels of the dataset as we overwrite by 1 as real
                 #logging.info(f'Epoch: {epoch+1}/{epochs} - Batch: {n+1}/{len(train_loader)}')
@@ -283,12 +309,13 @@ if __name__ == '__main__':
                 logits_g = model_d(fake_samples_g)
                 # calculate loss
                 
-                loss_g = criterion_d(logits_g, fake_labels_g) 
+                loss_g = criterion(logits_g, fake_labels_g) 
 
                 loss_g_batch = loss_g.item()
 
 
-                binary_pred_g_samples = (loss_g.detach() >= 0.5).float() # 1
+                binary_pred_g_samples = (logits_g.detach() >= 0.5).float() # 1
+                
                 
                 # Count how many of these were predicted as 'real' (which is the generator's goal)
                 total_g_count_success += (binary_pred_g_samples == 1).sum().item()
@@ -301,13 +328,16 @@ if __name__ == '__main__':
 
             if total_g_count > 0: # Avoid division by zero
                 gen_success_accuracy = total_g_count_success / total_g_count
+                logging.info(f'{total_g_count_success} - {total_g_count}')
             else:
                 gen_success_accuracy = 0.0
 
             loss_d_epoch = loss_d.item()
             loss_g_epoch = loss_g.item()
+
             logging.info(f'epoch {epoch}, Loss Discriminator: {loss_d_epoch:.4f} - Loss Generator: {loss_g_epoch:.4f}')
-            logging.info(f'epoch {epoch}, Accuracy Success Generator: {gen_success_accuracy.item():.4f}')
+            logging.info(f'epoch {epoch}, Accuracy Success Generator: {gen_success_accuracy:.4f}')
+
 
 
     saved_model_path = './mnist_gan/'
@@ -325,11 +355,57 @@ if __name__ == '__main__':
             'optimizer_g_state_dict': optim_g.state_dict(),
             'loss_d': loss_d.item(),
             'loss_g': loss_g.item(),
-            'accuracy_g': gen_success_accuracy.item(),
+            'accuracy_g': gen_success_accuracy,
             'save_timestamp': timestamp, # Ensure 'timestamp' is defined (e.g., datetime.now().isoformat())
         },
-        f"{saved_model_path}gan_checkpoint_epoch_{epoch+1}.pt" # <-- Missing filename here!
+        f"{saved_model_path}gan_checkpoint_epoch_{timestamp}_epoch-{epoch}.pt" # <-- Missing filename here!
     )
 
 
  
+
+# %%
+    if True:
+        # Generate latent space samples for these images
+        display_num_samples = 32 
+        latent_dim = 100 # Your latent space dimension
+        display_latent_samples = torch.randn(display_num_samples, latent_dim).to(device)
+
+        # Generate the images
+        model_g.eval() # Set generator to evaluation mode
+        with torch.no_grad(): # No need for gradients when generating for display
+            generated_images = model_g(display_latent_samples) # Shape: (display_num_samples, 1, 28, 28)
+
+        # Get the discriminator's classification for these generated images
+        model_d.eval() # Set discriminator to evaluation mode
+        with torch.no_grad(): # No need for gradients here either
+            # Pass generated images to discriminator; detach them from G's graph for D's inference
+            discriminator_outputs = model_d(generated_images.detach()) # Shape: (display_num_samples, 1)
+
+        # Convert discriminator outputs (probabilities) to binary predictions (0 or 1)
+        # 0 = Fail (discriminator thinks it's fake), 1 = Success (discriminator thinks it's real)
+        binary_predictions = (discriminator_outputs >= 0.5).int().flatten().tolist()
+        # Note: I'm calling it 'binary_predictions' here, not 'numpy_array_2d' as that variable was used for something else.
+
+        # Set up the plot grid
+        fig, ax = plt.subplots(4, 8) # Added figsize for better readability
+        ax_flatten = ax.flatten()
+
+        # Loop through and display each generated image with its predicted label
+        for i in range(display_num_samples): # Iterate based on the number of samples you generated
+            tensor_imshow(
+                image=generated_images[i],          # Pass the single image tensor
+                label_idx=binary_predictions[i],    # Pass the single integer prediction (0 or 1)
+                class_names=['F', 'S'],    # Your class names for 0 and 1
+                is_normalize=True,                  # Keep true if generated images are normalized
+                ax=ax_flatten[i]                    # Pass the specific subplot axis
+            )
+
+        plt.suptitle('Generated Images and Discriminator Predictions') # Optional title for the whole figure
+        plt.tight_layout()
+        plt.show() # Display the plot
+
+
+
+
+# %%
