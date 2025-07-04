@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 import datetime
-timestamp = datetime.datetime.now().isoformat()
+
+import torchsummary
 
 
 # %%
@@ -115,7 +116,6 @@ class Discriminator(nn.Module):
             nn.Sigmoid()
         )
 
-
     def forward(self,x: torch.Tensor):
         # convert the image in 1d vector (28,28) = > 784 pix 
         x = x.view(x.size(0), 784)
@@ -126,7 +126,6 @@ class Discriminator(nn.Module):
 class Generator(nn.Module):
     def __init__(self):
         super().__init__()
-
         self.model = nn.Sequential(
             nn.Linear(in_features=100,out_features=256), #28
             nn.ReLU(),
@@ -178,9 +177,7 @@ if __name__ == '__main__':
 
     train_loader = DataLoader(full_dataset, batch_size=32, shuffle=True)
 
-# %%
-
-    if False:
+    if False: # option for displaying sample of image
         fig, ax = plt.subplots(3,3)
         ax_flatten = ax.flatten()
 
@@ -203,22 +200,34 @@ if __name__ == '__main__':
                           ax =ax_flatten[i])
     
 
+    logging.info(f'init the models g and d')
 
-# %%
-    init_discriminator = Discriminator().to(device=device)
-    init_generator = Generator().to(device=device)
+    model_d = Discriminator().to(device=device)
+    model_g = Generator().to(device=device)
 
-    init_discriminator.apply(weights_init)
-    init_generator.apply(weights_init)
+    model_d.apply(weights_init)
+    model_g.apply(weights_init)
 
     epochs = 20        # Number of training epochs
     batch_size = 32    # Batch size for training
     lr_g = 0.0002      # Learning rate for the Generator
     lr_d = 0.0002      # Learning rate for the Discriminator
-    dis_criterion = nn.BCELoss()  
-    optim_gen = optim.Adam(init_generator.parameters(),lr=lr_g)
-    optim_dis = optim.Adam(init_discriminator.parameters(),lr=lr_d)
+    criterion = nn.BCELoss()  
+    
+    optim_d = optim.Adam(model_d.parameters(),lr=lr_d)
+    optim_g = optim.Adam(model_g.parameters(),lr=lr_g)
 
+    model_d_summary = torchsummary.summary(model_d, input_size=(1, 28, 28) , device='cuda')
+    model_g_summary = torchsummary.summary(model_g, input_size=(100,), device='cuda')
+
+    logging.info(f'model d:') # No newline at the end of the string here
+    print(f'{model_d_summary}') # No newline at the end of the string here
+    logging.info('') # This will create an empty log record, effectively a blank line
+
+    logging.info(f'model g:') # No newline
+    print(f'{model_g_summary}') # No newline
+    logging.info('') # Another blank line
+    
 
 #%%
     if True: 
@@ -226,89 +235,96 @@ if __name__ == '__main__':
             total_g_count_success = 0
             total_g_count = 0
             logging.info(f'Epoch: {epoch+1}/{epochs}')
-            for n, (real_samples, _) in enumerate(train_loader):
+            for batch_idx, (real_samples, _) in enumerate(train_loader):
                 # generator process for initial data
+                # not using the labels of the dataset as we overwrite by 1 as real
                 #logging.info(f'Epoch: {epoch+1}/{epochs} - Batch: {n+1}/{len(train_loader)}')
 
                 # get real data to device
                 real_samples = real_samples.to(device=device)
-                real_discriminator_labels = torch.ones(batch_size,1).to(device=device)
+                real_d_labels = torch.ones(batch_size,1).to(device=device)
                 
                 # Generate fake images, and labels to device
                 latent_dim = 100 # Or whatever your chosen latent space dimension is
-                latent_space_samples_for_D = torch.randn(batch_size, latent_dim).to(device=device)
+                latent_space_samples_d = torch.randn(batch_size, latent_dim).to(device=device)
 
-                # Generate fake images using the generator
-                generated_samples = init_generator(latent_space_samples_for_D)
-                fake_discriminator_labels = torch.zeros(batch_size,1).to(device=device)
+                # Generate fake images using the generator for discriminator process
+                fake_samples_d = model_g(latent_space_samples_d)
+                fake_labels_d = torch.zeros(batch_size,1).to(device=device)
                 
                 # combine real and fake data
-                all_samples = torch.cat((real_samples, generated_samples.detach()), dim=0)
-                all_labels = torch.cat((real_discriminator_labels, fake_discriminator_labels), dim=0)
+                all_samples = torch.cat((real_samples, fake_samples_d.detach()), dim=0)
+                all_labels = torch.cat((real_d_labels, fake_labels_d), dim=0)
                 
                 ## init_discriminator ##
                 # train discriminator
-                init_discriminator.train()
-                optim_dis.zero_grad()
-                logits_dis = init_discriminator(all_samples)
+                model_d.train()
+                optim_d.zero_grad()
+                logits_d = model_d(all_samples)
                 # calculate loss
-                loss_dis = dis_criterion(logits_dis, all_labels)
-                loss_d_batch = loss_dis.item()
+                loss_d = criterion(logits_d, all_labels)
+                loss_d_batch = loss_d.item()
                 
-                #logging.info(f'Loss Discriminator batch - {n}: {loss_d_batch:.4f}')
+                #logging.info(f'Loss Discriminator batch - {batch_idx}: {loss_d_batch:.4f}')
                 # backpropagation
-                loss_dis.backward()
-                optim_dis.step()
+                loss_d.backward()
+                optim_d.step()
                 
                 # data for generator
-                latent_space_samples_for_G = torch.randn(batch_size, latent_dim).to(device=device)
+                latent_space_samples_g = torch.randn(batch_size, latent_dim).to(device=device)
 
                 ## init_generator ##
                 # train generator
-                init_generator.train()
-                optim_gen.zero_grad()
-                generated_samples_for_G = init_generator(latent_space_samples_for_G)
-                logits_gen = init_discriminator(generated_samples_for_G)
+                model_g.train()
+                optim_g.zero_grad()
+                fake_samples_g = model_g(latent_space_samples_g)
+                fake_labels_g = torch.ones(batch_size, 1).to(device=device)
+
+                logits_g = model_d(fake_samples_g)
                 # calculate loss
-                generator_target_labels = torch.ones(batch_size, 1).to(device=device)
-                loss_gen = dis_criterion(logits_gen, generator_target_labels) # <-- CORRECTED
+                
+                loss_g = criterion_d(logits_g, fake_labels_g) 
 
-                loss_g_batch = loss_gen.item()
+                loss_g_batch = loss_g.item()
 
 
-                binary_predictions_for_gen_samples = (logits_gen.detach() >= 0.5).float() # 1
+                binary_pred_g_samples = (loss_g.detach() >= 0.5).float() # 1
                 
                 # Count how many of these were predicted as 'real' (which is the generator's goal)
-                total_g_count_success += (binary_predictions_for_gen_samples == 1).sum().item()
+                total_g_count_success += (binary_pred_g_samples == 1).sum().item()
                 total_g_count += batch_size # Each batch adds `batch_size` samples to the total count
 
-                #logging.info(f'Loss Generator batch - {n}: {loss_g_batch:.4f}')
+                #logging.info(f'Loss Generator batch - {batch_idx}: {loss_g_batch:.4f}')
                 # backpropagation
-                loss_gen.backward()
-                optim_gen.step()
+                loss_g.backward()
+                optim_g.step()
 
             if total_g_count > 0: # Avoid division by zero
                 gen_success_accuracy = total_g_count_success / total_g_count
             else:
                 gen_success_accuracy = 0.0
 
-            logging.info(f'epoch {epoch}, Loss Discriminator: {loss_dis.item():.4f} - Loss Generator: {loss_gen.item():.4f}')
+            loss_d_epoch = loss_d.item()
+            loss_g_epoch = loss_g.item()
+            logging.info(f'epoch {epoch}, Loss Discriminator: {loss_d_epoch:.4f} - Loss Generator: {loss_g_epoch:.4f}')
             logging.info(f'epoch {epoch}, Accuracy Success Generator: {gen_success_accuracy.item():.4f}')
 
 
     saved_model_path = './mnist_gan/'
+    timestamp = datetime.datetime.now().isoformat()
 
     os.makedirs(saved_model_path, exist_ok=True)
     
     torch.save(
         {
+            'dataset': 'mnist',
             'epoch': epoch,
-            'model_d_state_dict': init_discriminator.state_dict(),
-            'optimizer_d_state_dict': optim_dis.state_dict(),
-            'model_g_state_dict': init_generator.state_dict(),
-            'optimizer_g_state_dict': optim_gen.state_dict(),
-            'loss_d': loss_dis.item(),
-            'loss_g': loss_gen.item(),
+            'model_d_state_dict': model_d.state_dict(),
+            'optimizer_d_state_dict': optim_d.state_dict(),
+            'model_g_state_dict': model_g.state_dict(),
+            'optimizer_g_state_dict': optim_g.state_dict(),
+            'loss_d': loss_d.item(),
+            'loss_g': loss_g.item(),
             'accuracy_g': gen_success_accuracy.item(),
             'save_timestamp': timestamp, # Ensure 'timestamp' is defined (e.g., datetime.now().isoformat())
         },
@@ -316,43 +332,4 @@ if __name__ == '__main__':
     )
 
 
-                    
-# %%
-    if True:
-        # Generate new samples specifically for visualization
-        num_samples_to_display = 9 # For a 3x3 grid
-        latent_space_samples_for_viz = torch.randn(num_samples_to_display, latent_dim).to(device=device)
-        
-        # Set generator to evaluation mode and disable gradient calculations
-        init_generator.eval() 
-        with torch.no_grad():
-            samples_to_display = init_generator(latent_space_samples_for_viz).cpu() # Move to CPU for Matplotlib
-        init_generator.train() # Set generator back to training mode if you continue training
-
-        # Visualize generated images
-        fig, ax = plt.subplots(3, 3, figsize=(6, 6)) # Added figsize for better display
-        ax_flatten = ax.flatten()
-
-        for i in range(len(ax_flatten)):
-            # Reshape the flattened image to its original 2D shape (e.g., 28x28 for MNIST)
-            # Assuming your generated images are 784-dimensional and grayscale
-            image = samples_to_display[i].reshape(28, 28) 
-            
-            # Pass an empty string or a generic label for generated samples
-            # You might need to adapt this based on how tensor_imshow handles labels
-            # If tensor_imshow requires class_names, define a dummy one:
-            # class_names_gen = ["Generated Image"] 
-            
-            tensor_imshow(image=image,  
-                        label_idx=0, # Or simply omit if tensor_imshow is flexible
-                        class_names=["Generated"], # A dummy class name for display
-                        is_normalize=True, 
-                        ax=ax_flatten[i])
-            
-            # Optionally, set titles manually if tensor_imshow doesn't handle it the way you want
-            ax_flatten[i].set_title(f"Generated {i+1}")
-            ax_flatten[i].axis('off') # Turn off axes for cleaner image display
-
-        plt.tight_layout() # Adjust subplot params for a tight layout
-        plt.show() # Display the plot
-# %%
+ 
