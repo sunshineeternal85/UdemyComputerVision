@@ -131,58 +131,71 @@ def tensor_imshow(image: torch.Tensor,  label_idx: int, class_names: List[str],i
         ax.set_title(title_text)
     plt.tight_layout()
 
-class Discriminator(nn.Module):
-    def __init__(self ):
+class DiscriminatorDCGAN(nn.Module):
+    def __init__(self, img_channels=3, img_size=64):
         super().__init__()
-        self.model = nn.Sequential(
-            nn.Linear(in_features=12288,out_features=2048), #64
-            nn.LeakyReLU(0.3, inplace=True),
-            nn.Dropout(p=0.25),
+        # Assuming 64x64 input
+        self.main = nn.Sequential(
+            # Input: (batch, img_channels, 64, 64) -> (64, 32, 32)
+            nn.Conv2d(img_channels, 64, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Linear(in_features=2048,out_features=1024), #64
-            nn.LeakyReLU(0.3, inplace=True),
-            nn.Dropout(p=0.25),
-            
-            nn.Linear(in_features=1024,out_features=512), #64
-            nn.LeakyReLU(0.3, inplace=True),
-            nn.Dropout(p=0.25),
-            
-            nn.Linear(in_features=512,out_features=256), #64
-            nn.LeakyReLU(0.3, inplace=True),
-            nn.Dropout(p=0.25),
+            # (64, 32, 32) -> (128, 16, 16)
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Linear(in_features=256,out_features=1), #64
-            nn.Sigmoid()
+            # (128, 16, 16) -> (256, 8, 8)
+            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            # (256, 8, 8) -> (512, 4, 4)
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            # (512, 4, 4) -> (1, 1, 1) - Final convolution to get a single output logit
+            nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0, bias=False)
+            # No sigmoid here, use BCEWithLogitsLoss
         )
 
-    def forward(self,x: torch.Tensor):
-        # convert the image in 1d vector (3,64,64) = > 12288 pix 
-        x = x.view(x.size(0), 12288)
+    def forward(self, x):
+        return self.main(x).view(-1, 1)
+
+class GeneratorRGB(nn.Module):
+    def __init__(self, latent_dim=100, img_channels=3, img_size=64):
+        super().__init__()
         
-        logits = self.model(x)
-        return logits
+        self.init_res = img_size // (2**4) 
+        self.initial_channels = 512 
 
-class Generator(nn.Module):
-    def __init__(self):
-        super().__init__()
         self.model = nn.Sequential(
-            nn.Linear(in_features=100,out_features=256), #64
+            nn.Linear(in_features=latent_dim, 
+                      out_features=self.initial_channels * self.init_res * self.init_res),
             nn.ReLU(),
 
-            nn.Linear(in_features=256,out_features=512), #64
+            nn.ConvTranspose2d(self.initial_channels, self.initial_channels // 2, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(self.initial_channels // 2),
             nn.ReLU(),
 
-            nn.Linear(in_features=512,out_features=1024), #64
+            nn.ConvTranspose2d(self.initial_channels // 2, self.initial_channels // 4, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(self.initial_channels // 4),
             nn.ReLU(),
 
-            nn.Linear(in_features=1024,out_features=12288), # to get a 64 , 64 img size
-            nn.Tanh(),
+            nn.ConvTranspose2d(self.initial_channels // 4, self.initial_channels // 8, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(self.initial_channels // 8),
+            nn.ReLU(),
+
+            nn.ConvTranspose2d(self.initial_channels // 8, img_channels, kernel_size=4, stride=2, padding=1),
+            nn.Tanh()
         )
 
-    def forward(self, x): 
-        logits = self.model(x)
-        img = logits.view(x.size(0), 3, 64, 64) #  Reshapes 12288 pixels to 3x64x64 image
-        return img
+    def forward(self, x):
+        x = self.model[0](x) 
+        x = x.view(x.size(0), self.initial_channels, self.init_res, self.init_res)
+        x = self.model[1:](x) 
+        return x
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -245,8 +258,8 @@ if __name__ == '__main__':
 
     logging.info(f'init the models g and d')
 
-    model_d = Discriminator().to(device=device)
-    model_g = Generator().to(device=device)
+    model_d = DiscriminatorDCGAN().to(device=device)
+    model_g = GeneratorRGB().to(device=device)
 
     model_d.apply(weights_init)
     model_g.apply(weights_init)
