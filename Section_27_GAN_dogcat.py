@@ -11,7 +11,8 @@ from torch.utils.data import DataLoader, Dataset, Subset, ConcatDataset
 
 
 from torchvision import transforms
-from torchvision.datasets import MNIST
+import torchvision
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -38,6 +39,16 @@ class Custom_Dataset():
         self.transform = transform
         self.filenames_list = self._list_path_file(self.root_path)
 
+        # Filter out broken images at initialization
+        self.filenames_list = [f for f in self.filenames_list if self._is_valid_image(f)]
+
+    def _is_valid_image(self, path):
+        try:
+            img = Image.open(path)
+            img.verify()  # PIL throws if not valid
+            return True
+        except Exception:
+            return False
 
     def _list_path_file(self,root_path):
         filenames_list = []        
@@ -86,7 +97,7 @@ def transformer_base():
     transformer = transforms.Compose([
         transforms.Resize(size=(64,64)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=0.5, std=0.5)
+        transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5])
     ])
     return transformer
 
@@ -139,24 +150,29 @@ class DiscriminatorDCGAN(nn.Module):
             # Input: (batch, img_channels, 64, 64) -> (64, 32, 32)
             nn.Conv2d(img_channels, 64, kernel_size=4, stride=2, padding=1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout(0.3),
 
             # (64, 32, 32) -> (128, 16, 16)
             nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout(0.3),
 
             # (128, 16, 16) -> (256, 8, 8)
             nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout(0.3),
 
             # (256, 8, 8) -> (512, 4, 4)
             nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout(0.3),
 
             # (512, 4, 4) -> (1, 1, 1) - Final convolution to get a single output logit
             nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0, bias=False)
+            
             # No sigmoid here, use BCEWithLogitsLoss
         )
 
@@ -212,6 +228,20 @@ def weights_init(m):
         if m.bias is not None:
             nn.init.constant_(m.bias.data, 0)
 
+def save_generated_images(model_g, epoch, device, out_dir="samples"):
+    os.makedirs(out_dir, exist_ok=True)
+    model_g.eval()
+    with torch.no_grad():
+        z = torch.randn(32, 100).to(device)
+        samples = model_g(z)
+    grid = torchvision.utils.make_grid(samples, nrow=8, normalize=True, value_range=(-1,1))
+    plt.figure(figsize=(8,4))
+    plt.axis('off')
+    plt.title(f'Generated Images at Epoch {epoch}')
+    plt.imshow(np.transpose(grid.cpu().numpy(), (1,2,0)))
+    plt.savefig(f"{out_dir}/epoch_{epoch:03d}.png")
+    plt.close()
+
 
 #%%
 if __name__ == '__main__':
@@ -225,10 +255,12 @@ if __name__ == '__main__':
     logging.info(f'{device}-{num_device}')
 
     path = '../../../../media/laurent/SSD2/dataset/catsanddogs/PetImages/'
-    batch_size = 50
+    batch_size = 100
 
     full_dataset = Custom_Dataset(root_path=path, transform=transformer_base())
-
+    np.random.seed(42)  # For reproducibility
+    no_subset = np.random.choice(a=np.arange(0, len(full_dataset)), size=5000, replace=False) # Randomly select 5000 samples
+    full_dataset = Subset(full_dataset, no_subset) # Limit to 5000 samples for faster training
     train_loader = DataLoader(full_dataset, batch_size=batch_size, shuffle=True)
 
     if True: # option for displaying sample of image
@@ -236,7 +268,7 @@ if __name__ == '__main__':
         ax_flatten = ax.flatten()
 
 
-        i_dataset = np.random.choice(a=np.random.randint(0,24999,9),size=9,replace=False)
+        i_dataset = np.random.choice(a=np.random.randint(0,4999,9),size=9,replace=False)
         
         for i in range(len(ax_flatten)):
             print(i_dataset[i])
@@ -265,7 +297,7 @@ if __name__ == '__main__':
     model_g.apply(weights_init)
 
 
-    epochs = 20        # Number of training epochs
+    epochs = 60        # Number of training epochs
     lr_g = 0.0002      # Learning rate for the Generator
     lr_d = 0.0002      # Learning rate for the Discriminator
     criterion = nn.BCEWithLogitsLoss() 
@@ -274,28 +306,28 @@ if __name__ == '__main__':
     optim_g = optim.Adam(model_g.parameters(), lr=lr_g, betas=(0.5, 0.999))
 
 
+    if True:
+        checkpoint_path = './dogcat_gan'
 
-    checkpoint_path = './dogcat_gan'
+        if os.path.isdir(checkpoint_path):
+            list_saved = os.listdir(checkpoint_path)
+            list_saved.sort()
+            backup_file_name = list_saved[-1] 
+            full_checkpoint_path = os.path.join(checkpoint_path, backup_file_name)
 
-    if os.path.isdir(checkpoint_path):
-        list_saved = os.listdir(checkpoint_path)
-        list_saved.sort()
-        backup_file_name = list_saved[-1] 
-        full_checkpoint_path = os.path.join(checkpoint_path, backup_file_name)
+            model_static = torch.load(full_checkpoint_path, map_location=device)
+            model_static_d = model_static['model_d_state_dict']
+            model_static_g = model_static['model_g_state_dict']
+            model_static_g = model_static['model_g_state_dict']
+            optim_d.load_state_dict(model_static['optimizer_d_state_dict'])
+            optim_g.load_state_dict(model_static['optimizer_g_state_dict'])
 
-        model_static = torch.load(full_checkpoint_path, map_location=device)
-        model_static_d = model_static['model_d_state_dict']
-        model_static_g = model_static['model_g_state_dict']
-        model_static_g = model_static['model_g_state_dict']
-        optim_d.load_state_dict(model_static['optimizer_d_state_dict'])
-        optim_g.load_state_dict(model_static['optimizer_g_state_dict'])
+            model_d.load_state_dict(model_static_d)
+            model_g.load_state_dict(model_static_g)
 
-        model_d.load_state_dict(model_static_d)
-        model_g.load_state_dict(model_static_g)
-
-        model_d.to(device=device)
-        model_g.to(device=device)
-        logging.info(f'loading {backup_file_name}')
+            model_d.to(device=device)
+            model_g.to(device=device)
+            logging.info(f'loading {backup_file_name}')
 
 
 
@@ -306,8 +338,8 @@ if __name__ == '__main__':
     logging.info(f'model g:') # No newline
     print(f'{model_g}') # No newline
     logging.info('') # Another blank line
-    
 
+#%%   
     if True: 
         for epoch in range(epochs):
             total_g_count_success = 0
@@ -315,23 +347,26 @@ if __name__ == '__main__':
             logging.info(f'Epoch: {epoch}/{epochs}')
             for batch_idx, (real_samples, _) in enumerate(train_loader):
 
-                #current_batch_size = real_samples.size(0) 
+                current_batch_size = real_samples.size(0) 
 
                 # generator process for initial data
                 # not using the labels of the dataset as we overwrite by 1 as real
                 #logging.info(f'Epoch: {epoch+1}/{epochs} - Batch: {n+1}/{len(train_loader)}')
 
+
                 # get real data to device
                 real_samples = real_samples.to(device=device)
-                real_d_labels = torch.ones(batch_size,1).to(device=device)
-                
+                #real_d_labels = torch.ones(batch_size,1).to(device=device)
+                real_d_labels = torch.full((current_batch_size, 1), 0.8, device=device)
+
                 # Generate fake images, and labels to device
                 latent_dim = 100 # Or whatever your chosen latent space dimension is
-                latent_space_samples_d = torch.randn(batch_size, latent_dim).to(device=device)
-
+                latent_space_samples_d = torch.randn(current_batch_size, latent_dim).to(device=device)
+                
                 # Generate fake images using the generator for discriminator process
                 fake_samples_d = model_g(latent_space_samples_d)
-                fake_labels_d = torch.zeros(batch_size,1).to(device=device)
+                #fake_labels_d = torch.zeros(batch_size,1).to(device=device)
+                fake_labels_d = torch.full((current_batch_size, 1), 0.2, device=device)
                 
                 # combine real and fake data
                 all_samples = torch.cat((real_samples, fake_samples_d.detach()), dim=0)
@@ -352,16 +387,18 @@ if __name__ == '__main__':
                 optim_d.step()
                 
                 # data for generator
-                latent_space_samples_g = torch.randn(batch_size, latent_dim).to(device=device)
+                latent_space_samples_g = torch.randn(current_batch_size, latent_dim).to(device=device)
 
                 ## init_generator ##
                 # train generator
                 model_g.train()
                 optim_g.zero_grad()
                 fake_samples_g = model_g(latent_space_samples_g)
-                fake_labels_g = torch.ones(batch_size, 1).to(device=device)
+                #fake_labels_g = torch.ones(batch_size, 1).to(device=device)
+                fake_labels_g = torch.ones(current_batch_size, 1).to(device=device) 
 
                 logits_g = model_d(fake_samples_g)
+                logging.info(f'logits_g_avg: {logits_g.mean().item():.4f}')  # Debugging info
                 # calculate loss
                 
                 loss_g = criterion(logits_g, fake_labels_g) 
@@ -369,12 +406,12 @@ if __name__ == '__main__':
                 loss_g_batch = loss_g.item()
 
 
-                binary_pred_g_samples = (logits_g.detach() >= 0.5).float() # 1
-                
-                
+                binary_pred_g_samples = (F.sigmoid(logits_g.detach()) >= 0.5).float() # 1
+
                 # Count how many of these were predicted as 'real' (which is the generator's goal)
                 total_g_count_success += (binary_pred_g_samples == 1).sum().item()
-                total_g_count += batch_size # Each batch adds `batch_size` samples to the total count
+                #total_g_count += current_batch_size # Each batch adds `current_batch_size` samples to the total count
+                total_g_count += binary_pred_g_samples.size(0)
 
                 #logging.info(f'Loss Generator batch - {batch_idx}: {loss_g_batch:.4f}')
                 # backpropagation
@@ -422,7 +459,7 @@ if __name__ == '__main__':
 # %%
     if True:
         # Generate latent space samples for these images
-        display_num_samples = 32 
+        display_num_samples = 4 
         latent_dim = 100 # Your latent space dimension
         display_latent_samples = torch.randn(display_num_samples, latent_dim).to(device)
 
@@ -443,7 +480,7 @@ if __name__ == '__main__':
         # Note: I'm calling it 'binary_predictions' here, not 'numpy_array_2d' as that variable was used for something else.
 
         # Set up the plot grid
-        fig, ax = plt.subplots(4, 8) # Added figsize for better readability
+        fig, ax = plt.subplots(2, 2) # Added figsize for better readability
         ax_flatten = ax.flatten()
 
         # Loop through and display each generated image with its predicted label
