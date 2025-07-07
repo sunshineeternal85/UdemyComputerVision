@@ -122,11 +122,11 @@ def tensor_imshow(image: torch.Tensor,  label_idx: int, class_names: List[str],i
     title_text = f'{class_names[label_idx]}- : {label_idx}' 
 
     if ax==None:
-        plt.imshow(image_np, cmap='gray')
+        plt.imshow(image_np)
         plt.axis('off')
         plt.title(title_text)
     else:
-        ax.imshow(image_np, cmap= 'gray')
+        ax.imshow(image_np)
         ax.axis('off')
         ax.set_title(title_text)
     plt.tight_layout()
@@ -268,10 +268,10 @@ if __name__ == '__main__':
     epochs = 20        # Number of training epochs
     lr_g = 0.0002      # Learning rate for the Generator
     lr_d = 0.0002      # Learning rate for the Discriminator
-    criterion = nn.BCELoss()  
+    criterion = nn.BCEWithLogitsLoss() 
     
-    optim_d = optim.Adam(model_d.parameters(),lr=lr_d)
-    optim_g = optim.Adam(model_g.parameters(),lr=lr_g)
+    optim_d = optim.Adam(model_d.parameters(), lr=lr_d, betas=(0.5, 0.999))
+    optim_g = optim.Adam(model_g.parameters(), lr=lr_g, betas=(0.5, 0.999))
 
 
 
