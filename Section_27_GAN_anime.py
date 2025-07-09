@@ -62,14 +62,8 @@ class Custom_Dataset():
 
     def __getitem__(self, idx:int):
         imgpath = self.filenames_list[idx]
-        folder_class = os.path.basename(os.path.dirname(imgpath))
         img = Image.open(imgpath).convert('RGB')
-        
-        if 'dog' in str(folder_class).lower():
-            label = 1
-        else:
-            label = 0
-
+        label = 0
         if self.transform:
             img = self.transform(img) 
 
@@ -248,27 +242,29 @@ if __name__ == '__main__':
 
     logging.info(f'{device}-{num_device}')
 
-    path = '../../../../media/laurent/SSD2/dataset/catsanddogs/PetImages/'
+    path = '../../../../media/laurent/SSD2/dataset/anime/archive/images'
     batch_size = 100
 
     full_dataset = Custom_Dataset(root_path=path, transform=transformer_base())
     np.random.seed(42)  # For reproducibility
-    no_subset = np.random.choice(a=np.arange(0, len(full_dataset)), size=5000, replace=False) # Randomly select 5000 samples
-    full_dataset = Subset(full_dataset, no_subset) # Limit to 5000 samples for faster training
+
+    len_subset = 15000
+    img_subset = np.random.choice(a=np.arange(0, len(full_dataset)), size=len_subset, replace=False) # Randomly select 15000 samples
+
+    full_dataset = Subset(full_dataset, img_subset) # Limit to 15000 samples for faster training
     train_loader = DataLoader(full_dataset, batch_size=batch_size, shuffle=True)
 
     if True: # option for displaying sample of image
         fig, ax = plt.subplots(3,3)
         ax_flatten = ax.flatten()
 
-
-        i_dataset = np.random.choice(a=np.random.randint(0,4999,9),size=9,replace=False)
+        i_dataset = np.random.choice(a=np.random.randint(0,len_subset-1,9),size=9,replace=False)
         
         for i in range(len(ax_flatten)):
             print(i_dataset[i])
             image, label_idx = full_dataset[i_dataset[i]]
 
-            class_names = ['cat', 'dog']
+            class_names = ['anime']
 
 
             logging.info(f'{label_idx}')
@@ -291,7 +287,7 @@ if __name__ == '__main__':
     model_g.apply(weights_init)
 
 
-    epochs = 60        # Number of training epochs
+    epochs = 150        # Number of training epochs
     lr_g = 0.0002      # Learning rate for the Generator
     lr_d = 0.0002      # Learning rate for the Discriminator
     criterion = nn.BCEWithLogitsLoss() 
@@ -301,7 +297,7 @@ if __name__ == '__main__':
 
 
     if True:
-        checkpoint_path = './dogcat_gan'
+        checkpoint_path = './anime_gan'
 
         if os.path.isdir(checkpoint_path):
             list_saved = os.listdir(checkpoint_path)
@@ -380,24 +376,30 @@ if __name__ == '__main__':
                 loss_d.backward()
                 optim_d.step()
                 
+                k_generator_steps = 3 # Or 2, 3, etc. Experiment with this!
+                for _ in range(k_generator_steps):
                 # data for generator
-                latent_space_samples_g = torch.randn(current_batch_size, latent_dim).to(device=device)
+                    latent_space_samples_g = torch.randn(current_batch_size, latent_dim).to(device=device)
 
-                ## init_generator ##
-                # train generator
-                model_g.train()
-                optim_g.zero_grad()
-                fake_samples_g = model_g(latent_space_samples_g)
-                #fake_labels_g = torch.ones(batch_size, 1).to(device=device)
-                fake_labels_g = torch.ones(current_batch_size, 1).to(device=device) 
+                    ## init_generator ##
+                    # train generator
+                    model_g.train()
+                    optim_g.zero_grad()
+                    fake_samples_g = model_g(latent_space_samples_g)
+                    #fake_labels_g = torch.ones(batch_size, 1).to(device=device)
+                    fake_labels_g = torch.ones(current_batch_size, 1).to(device=device) 
 
-                logits_g = model_d(fake_samples_g)
-                logging.info(f'logits_g_avg: {logits_g.mean().item():.4f}')  # Debugging info
-                # calculate loss
-                
-                loss_g = criterion(logits_g, fake_labels_g) 
+                    logits_g = model_d(fake_samples_g)
+                    logging.debug(f'logits_g_avg: {logits_g.mean().item():.4f}')  # Debugging info
+                    # calculate loss
+                    
+                    loss_g = criterion(logits_g, fake_labels_g) 
 
-                loss_g_batch = loss_g.item()
+                    loss_g_batch = loss_g.item()
+                    #logging.info(f'Loss Generator batch - {batch_idx}: {loss_g_batch:.4f}')
+                    # backpropagation
+                    loss_g.backward()
+                    optim_g.step()
 
 
                 binary_pred_g_samples = (F.sigmoid(logits_g.detach()) >= 0.5).float() # 1
@@ -407,10 +409,7 @@ if __name__ == '__main__':
                 #total_g_count += current_batch_size # Each batch adds `current_batch_size` samples to the total count
                 total_g_count += binary_pred_g_samples.size(0)
 
-                #logging.info(f'Loss Generator batch - {batch_idx}: {loss_g_batch:.4f}')
-                # backpropagation
-                loss_g.backward()
-                optim_g.step()
+
 
             if total_g_count > 0: # Avoid division by zero
                 gen_success_accuracy = total_g_count_success / total_g_count
@@ -426,14 +425,14 @@ if __name__ == '__main__':
 
 
 
-    saved_model_path = './dogcat_gan/'
+    saved_model_path = './anime_gan/'
     timestamp = datetime.datetime.now().isoformat()
 
     os.makedirs(saved_model_path, exist_ok=True)
     
     torch.save(
         {
-            'dataset': 'dogcat',
+            'dataset': 'anime',
             'epoch': epoch,
             'model_d_state_dict': model_d.state_dict(),
             'optimizer_d_state_dict': optim_d.state_dict(),
