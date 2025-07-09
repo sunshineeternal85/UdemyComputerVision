@@ -208,7 +208,7 @@ class GeneratorRGB(nn.Module):
             nn.BatchNorm2d(self.initial_channels_factor // 8),
             nn.ReLU(True),
 
-            # (initial_channels_factor/8, 32, 32) -> (img_channels, 64, 64)
+            # (initial_channels_factor/8, 32,     logging.info(f'Initializing Generator and Discriminator models...')32) -> (img_channels, 64, 64)
             nn.ConvTranspose2d(self.initial_channels_factor // 8, img_channels, kernel_size=4, stride=2, padding=1, bias=False),
             nn.Tanh() # Output pixel values in [-1, 1]
         )
@@ -301,7 +301,7 @@ def load_checkpoint(model_d, optim_d, model_g, optim_g, out_dir=CHECKPOINT_DIR, 
     except Exception as e:
         logging.error(f"Error loading checkpoint {full_checkpoint_path}: {e}")
         return 0 # Start from epoch 0 if loading fails
-
+# %%
 # --- Main Training Logic ---
 if __name__ == '__main__':
     init_logs()
